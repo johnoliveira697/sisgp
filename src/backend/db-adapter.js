@@ -76,14 +76,10 @@ if (USE_PG) {
 
 } else {
   // ── SQLITE (local) ────────────────────────────────────────────────────────
-  const sqlite3 = require('sqlite3').verbose();
-  const path = require('path');
-  const db = new sqlite3.Database(
-    path.resolve(__dirname, '../../database.db'),
-    (err) => {
-      if (err) console.error('Erro ao conectar ao SQLite:', err.message);
-      else console.log('Conectado ao banco de dados SQLite local.');
-    }
-  );
-  module.exports = db;
+  // Reaproveita database.js, que além de abrir a conexão também cria as tabelas
+  // (usuarios, missoes, ferias, dispensas, saques_etapa), popula a tabela de soldos
+  // e cria o administrador padrão quando o banco está vazio. Isso é essencial em
+  // qualquer ambiente novo (ex.: primeiro deploy num VPS, onde database.db ainda
+  // não existe) - sem isso, o banco fica sem tabelas e toda consulta falha.
+  module.exports = require('./database');
 }

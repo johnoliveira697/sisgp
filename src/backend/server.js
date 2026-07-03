@@ -201,6 +201,7 @@ app.post('/api/login', loginLimiter, (req, res) => {
 
   db.get('SELECT * FROM usuarios WHERE matricula = ?', [matricula], (err, user) => {
     if (err) {
+      console.error('Erro ao buscar usuário no login:', err.message);
       return res.status(500).json({ error: 'Erro no servidor ao buscar usuário.' });
     }
 
