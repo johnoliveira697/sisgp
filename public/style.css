@@ -1282,6 +1282,34 @@ body {
     padding: 16px;
   }
 
+  /* Modais em celular: viram uma "folha" de tela cheia com o cabeçalho
+     (título + botão de fechar) fixo no topo. Sem isso, formulários longos
+     (ex: Cadastrar Militar) empurravam o cabeçalho para fora da tela ao
+     rolar, dando a sensação de estar preso numa tela cheia sem saída. */
+  .modal {
+    padding: 0;
+    align-items: flex-start;
+  }
+  .modal-content {
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--bg-card);
+    flex-shrink: 0;
+  }
+  .modal-content > form,
+  .modal-content > .modal-body {
+    overflow-y: auto;
+    flex: 1;
+  }
+
   /* Evita que o iOS Safari aplique zoom automático ao focar em campos de
      formulário com font-size menor que 16px. Mantém a densidade visual do
      desktop intacta, só ajusta em telas de tablet/celular. */
