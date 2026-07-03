@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Pessoal - Forças Armadas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1.0.6">
+</head>
+<body>
+
+  <!-- Notificação Flutuante -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- TELA DE LOGIN / CADASTRO -->
+  <div id="edit-missao-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Editar Deslocamento</h3>
+        <button class="close-modal" id="close-edit-missao-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-edit-missao">
+          <input type="hidden" id="edit-missao-id">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-missao-nome">Nome do Deslocamento</label>
+              <input type="text" id="edit-missao-nome" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-missao-tipo">Tipo</label>
+              <select id="edit-missao-tipo" required>
+                <option value="Missão">Missão</option>
+                <option value="Reconhecimento">Reconhecimento</option>
+                <option value="Adestramento">Adestramento</option>
+                <option value="Cursos/Estágio">Cursos/Estágio</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-missao-descricao">Descrição</label>
+            <input type="text" id="edit-missao-descricao">
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-missao-inicio">Data e Hora de Início</label>
+              <input type="datetime-local" id="edit-missao-inicio" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-missao-termino">Data e Hora de Término</label>
+              <input type="datetime-local" id="edit-missao-termino" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-missao-localidade">Gratificação de Localidade</label>
+              <select id="edit-missao-localidade">
+                <option value="0">Nenhuma (0%)</option>
+                <option value="10">10%</option>
+                <option value="20">20%</option>
+              </select>
+            </div>
+          </div>
+          
+          <!-- Cursos/Estágio Específicos -->
+          <div id="edit-painel-cursos" class="hidden" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+            <div class="form-row">
+              <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="edit-missao-gratificacao" style="width: auto; margin: 0; cursor: pointer;">
+                <label for="edit-missao-gratificacao" style="margin: 0; cursor: pointer;">Pagar Representação</label>
+              </div>
+              <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="edit-missao-ajudacusto" style="width: auto; margin: 0; cursor: pointer;">
+                <label for="edit-missao-ajudacusto" style="margin: 0; cursor: pointer;">Pagar Ajuda de Custo</label>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+              <label for="edit-missao-dias-grat">Dias Específicos para Representação</label>
+              <input type="number" id="edit-missao-dias-grat">
+            </div>
+          </div>
+          
+          <!-- Saque Alimentação -->
+          <div class="form-row" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+            <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+              <input type="checkbox" id="edit-missao-receber-saque" style="width: auto; margin: 0; cursor: pointer;">
+              <label for="edit-missao-receber-saque" style="margin: 0; cursor: pointer;">Receber Saque Alimentação</label>
+            </div>
+            <div id="edit-painel-saque" class="hidden" style="margin-top: 10px; width: 100%; display: flex; gap: 15px;">
+              <div class="form-group" style="flex: 1;">
+                <label for="edit-missao-dias-saque">Quantidade de Dias</label>
+                <input type="number" id="edit-missao-dias-saque">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label for="edit-missao-qtd-saque">Qtd de Saques por dia</label>
+                <input type="number" id="edit-missao-qtd-saque">
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Salvar Alterações</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+  <div id="login-container" class="login-container">
+    <div class="ring">
+      <i style="--clr:#00ff0a;"></i>
+      <i style="--clr:#ff0057;"></i>
+      <i style="--clr:#fffd44;"></i>   
+      
+      <!-- Formulário de Login -->
+      <div id="login-form-wrapper" class="login">
+        <h2>Login</h2>
+        <form id="login-form">
+          <div class="inputBx">
+            <input type="text" id="login-matricula" placeholder="Identidade" required autocomplete="username">
+          </div>
+          <div class="inputBx">
+            <input type="password" id="login-senha" placeholder="Senha" required autocomplete="current-password">
+          </div>
+          <div class="inputBx">
+            <input type="submit" value="Entrar">
+          </div>
+          <div class="links">
+            <a href="#" id="link-esqueci-senha">Esqueci a Senha</a>
+          </div>
+        </form>
+      </div>
+
+      <!-- Formulário de Cadastro (Escondido por padrão) -->
+      <div id="signup-form-wrapper" class="login hidden">
+        <h2>Cadastrar-se</h2>
+        <form id="signup-form">
+          <div class="inputBx">
+            <input type="text" id="signup-nome" placeholder="Nome Completo" required>
+          </div>
+          <div class="inputBx">
+            <input type="text" id="signup-matricula" placeholder="Identidade (Login)" required>
+          </div>
+          <div class="inputBx">
+            <input type="password" id="signup-senha" placeholder="Senha" required>
+          </div>
+          <div class="inputBx select-inputBx">
+            <select id="signup-posto" required>
+              <option value="" disabled selected>Posto ou Graduação</option>
+            </select>
+          </div>
+          <div class="inputBx">
+            <input type="submit" value="Cadastrar">
+          </div>
+          <div class="links">
+            <a href="#" id="link-voltar-login">Já tem conta? Entrar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAINEL PRINCIPAL (DASHBOARD) -->
+  <div id="app-container" class="app-container hidden">
+    <!-- BARRA SUPERIOR -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
+            <path d="M2 17L12 22L22 17" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M2 12L12 17L22 12" fill="none" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          <span class="logo-text">SISGP</span>
+        </div>
+        <div class="divider"></div>
+        <div class="user-profile">
+          <span id="user-display-name" class="user-name">Nome Militar</span>
+          <span id="user-display-posto" class="user-posto">Posto / Graduação</span>
+          <span id="user-display-role" class="badge badge-role">Membro</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <!-- Alternador de Tema -->
+        <button id="theme-toggle" class="btn-icon" title="Alternar Modo Escuro/Claro">
+          <svg class="sun-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <button id="btn-logout" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Sair
+        </button>
+      </div>
+    </header>
+
+    <!-- NAVEGAÇÃO / MENUS -->
+    <nav class="app-nav">
+      <button class="nav-item active" data-tab="tab-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Lançar Deslocamento
+      </button>
+      <button class="nav-item" data-tab="tab-missoes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="12 2 2 7 12 12 22 7 12 2 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        Histórico de Missões
+      </button>
+      <button class="nav-item" data-tab="tab-ferias">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Férias e Dispensas
+      </button>
+      <button class="nav-item" data-tab="tab-pagamentos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="4" x2="12" y2="20"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+        Pagamentos
+      </button>
+      <button class="nav-item" data-tab="tab-destino-diario">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Destino Diário
+      </button>
+      <button id="nav-admin-tab" class="nav-item hidden admin-only" data-tab="tab-admin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+        Administração
+      </button>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="app-main">
+      <!-- ABA 1: MEU PAINEL (MEMBRO) -->
+      <section id="tab-dashboard" class="tab-panel active">
+        <!-- LINHA DE STATS RÁPIDOS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon icon-blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            </div>
+            <div class="stat-info">
+              <h3>Dias em Missão</h3>
+              <p id="stat-dias-missao">0 dias</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="stat-info">
+              <h3>Gratificação de Rep.</h3>
+              <p id="stat-gratificacao">R$ 0,00</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"></path><path d="M12 6v6l4 2"></path></svg>
+            </div>
+            <div class="stat-info">
+              <h3>Saque Alimentação</h3>
+              <p id="stat-saque-alimentacao">R$ 0,00</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO DE CONTROLE DE DISPENSAS E LANÇAMENTOS -->
+        <div class="dashboard-split-layout">
+          <!-- COLUNA ESQUERDA -->
+          <div class="dashboard-left-col">
+            <!-- CARD DE CRONOGRAMA DE DISPENSA (BALANÇO) -->
+            <div class="card card-dispensas-gauge">
+              <h2>Saldo de Dispensas (Folgas)</h2>
+              <div class="gauge-container">
+                <div class="gauge-visual">
+                  <svg viewBox="0 0 100 100" class="svg-gauge">
+                    <circle cx="50" cy="50" r="40" class="gauge-bg"></circle>
+                    <circle cx="50" cy="50" r="40" class="gauge-fill" id="gauge-fill-circle"></circle>
+                  </svg>
+                  <div class="gauge-text">
+                    <span id="gauge-remaining">0</span>
+                    <small>restantes</small>
+                  </div>
+                </div>
+                <div class="gauge-legend">
+                  <div class="legend-item">
+                    <span class="dot bg-blue"></span>
+                    <span class="label">Acumuladas por missões:</span>
+                    <span id="lbl-dispensas-acumuladas" class="value">0 dias</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="dot bg-orange"></span>
+                    <span class="label">Utilizadas:</span>
+                    <span id="lbl-dispensas-utilizadas" class="value">0 dias</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CARD HISTÓRICO DE SAQUE ETAPA -->
+            <div class="card table-card">
+              <h2>Histórico de Saque Etapa</h2>
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Período</th>
+                      <th>Etapas</th>
+                      <th>Valor</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-user-saques-etapa">
+                    <tr>
+                      <td colspan="4" class="text-center text-muted">Nenhum saque etapa solicitado.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- COLUNA DIREITA (Formulários Stacked: Missão, Dispensa, Saque Etapa) -->
+          <div class="dashboard-right-col">
+            <!-- FORMULÁRIO DE LANÇAMENTO DE MISSÃO PELO PRÓPRIO MEMBRO -->
+            <div class="card">
+              <h2>Lançar Deslocamento</h2>
+              <form id="form-membro-missao">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="membro-missao-nome">Nome do Deslocamento</label>
+                    <input type="text" id="membro-missao-nome" placeholder="Ex: Op. Escudo" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="membro-missao-tipo">Tipo de Deslocamento</label>
+                    <select id="membro-missao-tipo" required>
+                      <option value="Missão" selected>Missão</option>
+                      <option value="Reconhecimento">Reconhecimento</option>
+                      <option value="Adestramento">Adestramento</option>
+                      <option value="Cursos/Estágio">Cursos/Estágio</option>
+                      <option value="PCI">PCI</option>
+                      <option value="Instrução">Instrução</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="membro-missao-desc">Descrição / Detalhes</label>
+                  <textarea id="membro-missao-desc" rows="2" placeholder="Detalhes adicionais do deslocamento"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="membro-missao-inicio">Data e Hora de Saída</label>
+                    <input type="datetime-local" id="membro-missao-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="membro-missao-termino">Data e Hora de Retorno</label>
+                    <input type="datetime-local" id="membro-missao-termino" required>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="membro-missao-localidade">Gratificação de Localidade</label>
+                    <select id="membro-missao-localidade">
+                      <option value="0" selected>Nenhuma (0%)</option>
+                      <option value="10">10%</option>
+                      <option value="20">20%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Painel Oculto para Cursos/Estágio -->
+                <div id="membro-painel-cursos" class="hidden" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Opções Específicas para Cursos/Estágios</h4>
+                  <div class="form-row">
+                    <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" id="membro-missao-gratificacao" checked style="width: auto; margin: 0; cursor: pointer;">
+                      <label for="membro-missao-gratificacao" style="margin: 0; cursor: pointer; user-select: none;">Pagar Gratificação de Representação</label>
+                    </div>
+                    <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" id="membro-missao-ajudacusto" checked style="width: auto; margin: 0; cursor: pointer;">
+                      <label for="membro-missao-ajudacusto" style="margin: 0; cursor: pointer; user-select: none;">Pagar Ajuda de Custo (1 Soldo)</label>
+                    </div>
+                  </div>
+                  <div class="form-group" id="membro-dias-gratificacao-container" style="margin-top: 10px;">
+                    <label for="membro-missao-dias-grat">Dias Específicos para Gratificação de Representação</label>
+                    <input type="number" id="membro-missao-dias-grat" placeholder="Ex: 5">
+                    <small class="text-muted">Se deixado em branco, será pago por todo o período.</small>
+                  </div>
+                </div>
+
+                <!-- Saque Alimentação -->
+                <div class="form-row" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+                  <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input type="checkbox" id="membro-missao-receber-saque" style="width: auto; margin: 0; cursor: pointer;">
+                    <label for="membro-missao-receber-saque" style="margin: 0; cursor: pointer; user-select: none;">Receber Saque Alimentação</label>
+                  </div>
+                  <div id="membro-painel-saque" class="hidden" style="margin-top: 10px; width: 100%; display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                      <label for="membro-missao-dias-saque">Quantidade de Dias</label>
+                      <input type="number" id="membro-missao-dias-saque" placeholder="Ex: 5">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                      <label for="membro-missao-qtd-saque">Quantidade de Saques por dia (Ex: 1, 5, 10)</label>
+                      <input type="number" id="membro-missao-qtd-saque" placeholder="Ex: 1">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Preview de Cálculos da Missão do Membro -->
+                <div class="preview-panel">
+                  <h4>Pré-visualização dos Cálculos (Baseado no seu Soldo):</h4>
+                  <div class="preview-grid">
+                    <div class="preview-item">
+                      <span>Duração Calculada:</span>
+                      <strong id="membro-preview-dias">0 dias</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Gratificação de Representação (2%):</span>
+                      <strong id="membro-preview-gratificacao">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Gratificação de Localidade:</span>
+                      <strong id="membro-preview-localidade">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Ajuda de Custo:</span>
+                      <strong id="membro-preview-ajudacusto">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Dispensas Geradas:</span>
+                      <strong id="membro-preview-dispensas">0 dias</strong>
+                    </div>
+                  </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Registrar Missão</button>
+              </form>
+            </div>
+
+            <!-- FORMULÁRIO DE SOLICITAÇÃO DE DISPENSA -->
+            <div class="card card-request-dispensa">
+              <h2>Lançar Solicitação de Dispensa</h2>
+              <form id="form-solicitar-dispensa">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="dispensa-inicio">Data de Início</label>
+                    <input type="date" id="dispensa-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="dispensa-termino">Data de Término</label>
+                    <input type="date" id="dispensa-termino" required>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="dispensa-tipo">Tipo de Dispensa</label>
+                  <select id="dispensa-tipo" required>
+                    <option value="missao" selected>Decorrente de Missão (Consome Saldo)</option>
+                    <option value="comum">Comum / Outros Motivos (Não consome Saldo)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="dispensa-obs">Observação / Justificativa</label>
+                  <textarea id="dispensa-obs" rows="3" placeholder="Insira o motivo ou detalhes da missão vinculada..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Enviar Solicitação</button>
+              </form>
+            </div>
+
+            <!-- FORMULÁRIO DE SOLICITAÇÃO DE SAQUE ETAPA -->
+            <div class="card card-request-saque">
+              <h2>Lançar Solicitação de Saque Etapa</h2>
+              <form id="form-solicitar-saque-etapa">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="saque-inicio">Data de Início</label>
+                    <input type="date" id="saque-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="saque-termino">Data de Término</label>
+                    <input type="date" id="saque-termino" required>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="saque-etapas">Quantidade de Etapas</label>
+                    <input type="number" id="saque-etapas" min="1" placeholder="Ex: 5" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Valor Estimado (R$ 13,50/etapa)</label>
+                    <div style="font-size: 1.25rem; font-weight: 700; padding: 10px 0; color: var(--success);" id="lbl-saque-valor-preview">R$ 0,00</div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="saque-obs">Observação / Detalhes</label>
+                  <textarea id="saque-obs" rows="2" placeholder="Insira o motivo ou observações..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Solicitar Saque Etapa</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA 2: HISTÓRICO DE MISSÕES (MEMBRO) -->
+      <section id="tab-missoes" class="tab-panel">
+        <div class="card table-card">
+          <div class="card-header">
+            <h2>Suas Missões Registradas</h2>
+            <!-- Filtro por período -->
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px;">
+              <label style="font-size:0.85rem; color:var(--text-secondary); white-space:nowrap;">Filtrar por período:</label>
+              <select id="filtro-missao-ano" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary); font-size:0.85rem;">
+                <option value="">Todos os anos</option>
+              </select>
+              <select id="filtro-missao-mes" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary); font-size:0.85rem;">
+                <option value="">Todos os meses</option>
+                <option value="1">Janeiro</option>
+                <option value="2">Fevereiro</option>
+                <option value="3">Março</option>
+                <option value="4">Abril</option>
+                <option value="5">Maio</option>
+                <option value="6">Junho</option>
+                <option value="7">Julho</option>
+                <option value="8">Agosto</option>
+                <option value="9">Setembro</option>
+                <option value="10">Outubro</option>
+                <option value="11">Novembro</option>
+                <option value="12">Dezembro</option>
+              </select>
+              <button id="btn-limpar-filtro-missao" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem;">Limpar Filtro</button>
+              <span id="lbl-total-missoes" style="font-size:0.82rem; color:var(--text-muted); margin-left:4px;"></span>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Nome da Missão</th>
+                  <th>Início</th>
+                  <th>Término</th>
+                  <th>Duração</th>
+                  <th>Gratificação</th>
+                  <th>Saque Alimentação</th>
+                  <th>Dispensas Geradas</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="table-user-missoes">
+                <tr>
+                  <td colspan="8" class="text-center text-muted">Carregando missões...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação de Missões -->
+          <div id="paginacao-missoes" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:16px; flex-wrap:wrap;"></div>
+        </div>
+      </section>
+
+      <!-- ABA 3: FÉRIAS E DISPENSAS (MEMBRO) -->
+      <section id="tab-ferias" class="tab-panel">
+        <div class="dashboard-split-layout">
+          <!-- Tabela de Férias -->
+          <div class="card table-card">
+            <h2>Histórico de Férias</h2>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Data de Início</th>
+                    <th>Data de Término</th>
+                    <th>Total Dias</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-user-ferias">
+                  <tr>
+                    <td colspan="4" class="text-center text-muted">Carregando férias...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tabela de Dispensas Usadas/Pendentes -->
+          <div class="card table-card">
+            <h2>Histórico de Dispensas (Lançamentos)</h2>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Início</th>
+                    <th>Término</th>
+                    <th>Dias</th>
+                    <th>Motivo</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-user-dispensas">
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Carregando dispensas...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA 4: PAGAMENTOS (MEMBRO E ADMIN) -->
+      <section id="tab-pagamentos" class="tab-panel">
+        <!-- VIEW DO ADMIN: lista agrupada por militar -->
+        <div id="pagamentos-admin-view" class="hidden">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+            <h2 style="margin:0; font-size:1.1rem;">Pagamentos de Missões</h2>
+            <span id="pagamentos-pendentes-badge" style="font-size:0.78rem; color:var(--text-muted); background:var(--bg-input); border:1px solid var(--border-color); border-radius:20px; padding:4px 14px;">0 pendentes</span>
+          </div>
+          <div id="pagamentos-accordion"></div>
+        </div>
+
+        <!-- VIEW DO MEMBRO: tabela simples -->
+        <div id="pagamentos-membro-view" class="hidden">
+          <div class="card table-card">
+            <div class="card-header" style="padding: 20px 24px 16px;">
+              <h2 style="margin:0; padding:0;">Meus Pagamentos</h2>
+              <!-- Filtro de ano -->
+              <div style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;">
+                <label style="font-size:0.85rem; color:var(--text-secondary);">Filtrar por ano:</label>
+                <select id="filtro-pagamento-ano" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary); font-size:0.85rem;">
+                  <option value="">Todos</option>
+                </select>
+                <span id="lbl-total-pagamentos" style="font-size:0.82rem; color:var(--text-muted);"></span>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-pagamentos">
+                <thead>
+                  <tr>
+                    <th>Deslocamento</th>
+                    <th class="text-center">Repr. (R$)</th>
+                    <th class="text-center">Aj. Custo (R$)</th>
+                    <th class="text-center">Localidade</th>
+                    <th class="text-center">Alimentação (R$)</th>
+                  </tr>
+                </thead>
+                <tbody id="table-pagamentos-body">
+                  <tr><td colspan="5" class="text-center text-muted">Nenhum registro de pagamento.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Paginação de Pagamentos -->
+            <div id="paginacao-pagamentos" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:16px; flex-wrap:wrap;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA 5: DESTINO DIÁRIO (CONSULTA DE DESTINOS) -->
+      <section id="tab-destino-diario" class="tab-panel">
+        <div class="card">
+          <h2>Consulta de Destino Diário</h2>
+          <div class="form-group" style="max-width: 300px;">
+            <label for="filtro-data-destino">Selecione a Data de Consulta</label>
+            <input type="date" id="filtro-data-destino" required>
+          </div>
+          <button id="btn-buscar-destino" class="btn btn-primary">Consultar Destinos</button>
+        </div>
+
+        <div class="card table-card">
+          <div class="card-header-actions">
+            <h2 id="titulo-destino-diario">Destino do Efetivo em: --/--/----</h2>
+            <button id="btn-imprimir-destino" class="btn btn-secondary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              Imprimir Destinos
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Posto/Grad</th>
+                  <th>Nome Militar</th>
+                  <th>Identidade</th>
+                  <th>Destino / Status</th>
+                  <th>Detalhes</th>
+                </tr>
+              </thead>
+              <tbody id="table-destino-diario-body">
+                <tr>
+                  <td colspan="5" class="text-center text-muted">Selecione uma data para consultar os destinos.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA 6: ADMINISTRAÇÃO (APENAS ADMINISTRADORES) -->
+      <section id="tab-admin" class="tab-panel admin-only">
+        <!-- NAVEGAÇÃO INTERNA DO ADMIN -->
+        <div class="admin-nav">
+          <button class="btn btn-tab active" data-subtab="admin-pessoal">Gerenciar Pessoal</button>
+          <button class="btn btn-tab" data-subtab="admin-missoes-ferias">Lançar Missão / Férias</button>
+          <button class="btn btn-tab" data-subtab="admin-avaliar-dispensas">Solicitações de Dispensa (<span id="count-pendentes">0</span>)</button>
+          <button class="btn btn-tab" data-subtab="admin-avaliar-saques">Solicitações de Saque Etapa (<span id="count-saques-pendentes">0</span>)</button>
+        </div>
+
+        <hr class="nav-divider">
+
+        <!-- SUBABA 1: GERENCIAR PESSOAL -->
+        <div id="subtab-admin-pessoal" class="subtab-panel active">
+          <div class="card">
+            <div class="card-header-actions">
+              <h2>Membros de Pessoal Cadastrados</h2>
+              <button id="btn-open-user-modal" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                Cadastrar Militar
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Identidade</th>
+                    <th>Nome</th>
+                    <th>Posto / Graduação</th>
+                    <th>Soldo Base</th>
+                    <th>Tipo Acesso</th>
+                    <th>Saldo Dispensas</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-admin-pessoal">
+                  <tr>
+                    <td colspan="7" class="text-center text-muted">Carregando dados...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBABA 2: LANÇAR MISSÃO / FÉRIAS -->
+        <div id="subtab-admin-missoes-ferias" class="subtab-panel">
+          <div class="admin-forms-layout">
+            <!-- Formulário de Nova Missão com Preview de Cálculos -->
+            <div class="card">
+              <h2>Lançar Novo Deslocamento</h2>
+              <form id="form-admin-missao">
+                <!-- Toggle Modo Individual / Múltiplo -->
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:12px 14px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+                  <span style="font-size:0.9rem; font-weight:500; color:var(--text-secondary);">Modo de Lançamento:</span>
+                  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+                    <input type="radio" name="admin-missao-modo" id="admin-missao-modo-individual" value="individual" checked style="width:auto; margin:0; cursor:pointer;">
+                    <span style="font-size:0.9rem;">Individual</span>
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+                    <input type="radio" name="admin-missao-modo" id="admin-missao-modo-multiplo" value="multiplo" style="width:auto; margin:0; cursor:pointer;">
+                    <span style="font-size:0.9rem;">Múltiplos Militares</span>
+                  </label>
+                </div>
+
+                <!-- Seleção Individual -->
+                <div id="admin-missao-painel-individual" class="form-group">
+                  <label for="admin-missao-militar">Militar Responsável</label>
+                  <select id="admin-missao-militar">
+                    <option value="">Selecione o militar...</option>
+                  </select>
+                </div>
+
+                <!-- Seleção Múltipla -->
+                <div id="admin-missao-painel-multiplo" class="hidden">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <label style="margin:0; font-weight:500;">Selecionar Militares</label>
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" id="btn-selecionar-todos" class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;">Todos</button>
+                      <button type="button" id="btn-limpar-selecao" class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;">Limpar</button>
+                    </div>
+                  </div>
+                  <div id="admin-missao-lista-militares" style="max-height:200px; overflow-y:auto; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; background:var(--bg-dark);">
+                    <span class="text-muted" style="font-size:0.85rem;">Carregando militares...</span>
+                  </div>
+                  <small class="text-muted" style="display:block; margin-top:6px;">Selecione um ou mais militares para lançar a missão simultaneamente.</small>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="admin-missao-nome">Nome do Deslocamento</label>
+                    <input type="text" id="admin-missao-nome" placeholder="Ex: Op. Fronteira" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="admin-missao-tipo">Tipo de Deslocamento</label>
+                    <select id="admin-missao-tipo" required>
+                      <option value="Missão" selected>Missão</option>
+                      <option value="Reconhecimento">Reconhecimento</option>
+                      <option value="Adestramento">Adestramento</option>
+                      <option value="Cursos/Estágio">Cursos/Estágio</option>
+                      <option value="PCI">PCI</option>
+                      <option value="Instrução">Instrução</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="admin-missao-desc">Descrição / Detalhes</label>
+                  <textarea id="admin-missao-desc" rows="2" placeholder="Detalhes adicionais"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="admin-missao-inicio">Data e Hora de Saída</label>
+                    <input type="datetime-local" id="admin-missao-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="admin-missao-termino">Data e Hora de Retorno</label>
+                    <input type="datetime-local" id="admin-missao-termino" required>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="admin-missao-dispensas">Dias de Dispensa (Manual)</label>
+                    <input type="number" id="admin-missao-dispensas" placeholder="Vazio para cálculo padrão">
+                  </div>
+                  <div class="form-group">
+                    <label for="admin-missao-localidade">Gratificação de Localidade</label>
+                    <select id="admin-missao-localidade">
+                      <option value="0" selected>Nenhuma (0%)</option>
+                      <option value="10">10%</option>
+                      <option value="20">20%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Painel Oculto para Cursos/Estágio -->
+                <div id="admin-painel-cursos" class="hidden" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+                  <h4 style="margin-top: 0; margin-bottom: 10px;">Opções Específicas para Cursos/Estágios</h4>
+                  <div class="form-row">
+                    <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" id="admin-missao-gratificacao" checked style="width: auto; margin: 0; cursor: pointer;">
+                      <label for="admin-missao-gratificacao" style="margin: 0; cursor: pointer; user-select: none;">Pagar Gratificação de Representação</label>
+                    </div>
+                    <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" id="admin-missao-ajudacusto" checked style="width: auto; margin: 0; cursor: pointer;">
+                      <label for="admin-missao-ajudacusto" style="margin: 0; cursor: pointer; user-select: none;">Pagar Ajuda de Custo (1 Soldo)</label>
+                    </div>
+                  </div>
+                  <div class="form-group" id="admin-dias-gratificacao-container" style="margin-top: 10px;">
+                    <label for="admin-missao-dias-grat">Dias Específicos para Gratificação de Representação</label>
+                    <input type="number" id="admin-missao-dias-grat" placeholder="Ex: 5">
+                    <small class="text-muted">Se deixado em branco, será pago por todo o período.</small>
+                  </div>
+                </div>
+
+                <!-- Saque Alimentação -->
+                <div class="form-row" style="margin-bottom: 15px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px;">
+                  <div class="form-group checkbox-group" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input type="checkbox" id="admin-missao-receber-saque" style="width: auto; margin: 0; cursor: pointer;">
+                    <label for="admin-missao-receber-saque" style="margin: 0; cursor: pointer; user-select: none;">Receber Saque Alimentação</label>
+                  </div>
+                  <div id="admin-painel-saque" class="hidden" style="margin-top: 10px; width: 100%; display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                      <label for="admin-missao-dias-saque">Quantidade de Dias</label>
+                      <input type="number" id="admin-missao-dias-saque" placeholder="Ex: 5">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                      <label for="admin-missao-qtd-saque">Quantidade de Saques por dia (Ex: 1, 5, 10)</label>
+                      <input type="number" id="admin-missao-qtd-saque" placeholder="Ex: 1">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Painel de Preview de Cálculos -->
+                <div class="preview-panel">
+                  <h4>Pré-visualização dos Cálculos:</h4>
+                  <div class="preview-grid">
+                    <div class="preview-item">
+                      <span>Duração Estimada:</span>
+                      <strong id="preview-dias">0 dias</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Gratificação Repres. (2%):</span>
+                      <strong id="preview-gratificacao">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Gratificação de Localidade:</span>
+                      <strong id="preview-localidade">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Ajuda de Custo:</span>
+                      <strong id="preview-ajudacusto">R$ 0,00</strong>
+                    </div>
+                    <div class="preview-item">
+                      <span>Dispensas Calculadas:</span>
+                      <strong id="preview-dispensas">0 dias</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" id="btn-admin-missao-submit" class="btn btn-primary">Registrar Missão</button>
+              </form>
+            </div>
+
+            <!-- Formulário de Nova Férias -->
+            <div class="card">
+              <h2>Lançar Férias</h2>
+              <form id="form-admin-ferias">
+                <div class="form-group">
+                  <label for="admin-ferias-militar">Militar</label>
+                  <select id="admin-ferias-militar" required>
+                    <option value="">Selecione o militar...</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="admin-ferias-inicio">Data de Início</label>
+                    <input type="date" id="admin-ferias-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="admin-ferias-termino">Data de Término</label>
+                    <input type="date" id="admin-ferias-termino" required>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Registrar Férias</button>
+              </form>
+
+              <div class="divider-horizontal" style="margin: 20px 0;"></div>
+
+              <h2>Lançar Dispensa Direta (Sem aprovação)</h2>
+              <form id="form-admin-dispensa-direta">
+                <div class="form-group">
+                  <label for="admin-disp-militar">Militar</label>
+                  <select id="admin-disp-militar" required>
+                    <option value="">Selecione o militar...</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="admin-disp-inicio">Início</label>
+                    <input type="date" id="admin-disp-inicio" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="admin-disp-termino">Término</label>
+                    <input type="date" id="admin-disp-termino" required>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="admin-disp-tipo">Tipo de Dispensa</label>
+                  <select id="admin-disp-tipo" required>
+                    <option value="missao" selected>Decorrente de Missão (Consome Saldo)</option>
+                    <option value="comum">Comum / Outros Motivos (Não consome Saldo)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="admin-disp-obs">Observação / Justificativa</label>
+                  <input type="text" id="admin-disp-obs" placeholder="Ex: Dispensado para tratamento de saúde..." required>
+                </div>
+                <button type="submit" class="btn btn-secondary">Registrar Dispensa</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBABA 3: AVALIAR SOLICITAÇÕES DE DISPENSA -->
+        <div id="subtab-admin-avaliar-dispensas" class="subtab-panel">
+          <div class="card">
+            <h2>Solicitações de Dispensa sob Avaliação</h2>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Militar</th>
+                    <th>Posto / Graduação</th>
+                    <th>Início</th>
+                    <th>Término</th>
+                    <th>Dias Solicitados</th>
+                    <th>Motivo / Observação</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-admin-dispensas">
+                  <tr>
+                    <td colspan="8" class="text-center text-muted">Nenhuma solicitação pendente.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBABA 4: AVALIAR SOLICITAÇÕES DE SAQUE ETAPA -->
+        <div id="subtab-admin-avaliar-saques" class="subtab-panel">
+          <div class="card">
+            <h2>Solicitações de Saque Etapa sob Avaliação</h2>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Militar</th>
+                    <th>Posto / Graduação</th>
+                    <th>Início</th>
+                    <th>Término</th>
+                    <th>Etapas</th>
+                    <th>Valor</th>
+                    <th>Obs / Detalhes</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-admin-saques-etapa">
+                  <tr>
+                    <td colspan="9" class="text-center text-muted">Nenhuma solicitação pendente.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL DE CADASTRO / EDIÇÃO DE MILITAR (ADMIN) -->
+  <div id="user-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-user-title">Cadastrar Novo Militar</h2>
+        <button id="btn-close-user-modal" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="form-user-save">
+        <input type="hidden" id="user-id-edit">
+        <div class="form-group">
+          <label for="user-nome">Nome Completo / Nome de Guerra</label>
+          <input type="text" id="user-nome" placeholder="Ex: Ten Cel Silva" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="user-matricula">Identidade (Login)</label>
+            <input type="text" id="user-matricula" placeholder="Ex: silva123" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="user-senha">Senha</label>
+            <input type="password" id="user-senha" placeholder="Digite para criar ou alterar" autocomplete="new-password">
+            <small id="user-senha-help" class="form-text text-muted">Senha provisória para primeiro acesso.</small>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="user-posto">Posto ou Graduação</label>
+            <select id="user-posto" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="user-soldo">Soldo Base (R$)</label>
+            <input type="number" id="user-soldo" step="0.01" required>
+            <small class="form-text text-muted">Carregado automaticamente pelo posto (pode ser editado).</small>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="user-role">Nível de Acesso</label>
+            <select id="user-role" required>
+              <option value="membro" selected>Membro (Apenas visualiza dados e solicita)</option>
+              <option value="admin">Administrador (Controle total do sistema)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="user-dispensas-iniciais">Saldo Inicial de Dispensas (Dias)</label>
+            <input type="number" id="user-dispensas-iniciais" value="0" min="0">
+            <small class="form-text text-muted">Caso já tenha saldo acumulado fora do sistema.</small>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="user-observacao">Observação / Contato</label>
+          <textarea id="user-observacao" rows="2" placeholder="Ex: Tel 61 99999-1234 | Observações sobre o militar..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-user-modal" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Militar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO DE BOLETINS INTERNOS (ADMIN) -->
+  <div id="bi-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Boletins Internos (BIs)</h2>
+        <button id="btn-close-bi-modal" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="form-bi-save">
+        <input type="hidden" id="bi-missao-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="bi-deslocamento">BI Deslocamento</label>
+            <input type="text" id="bi-deslocamento" placeholder="Ex: BI 12/2026">
+          </div>
+          <div class="form-group">
+            <label for="bi-retorno">BI Retorno</label>
+            <input type="text" id="bi-retorno" placeholder="Ex: BI 13/2026">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="bi-solicitacao-gratificacao">BI Solicitação Gratificação</label>
+          <input type="text" id="bi-solicitacao-gratificacao" placeholder="Ex: BI 14/2026">
+        </div>
+        <div class="form-group">
+          <label for="bi-observacao-pagamento">Observação do Pagamento</label>
+          <input type="text" id="bi-observacao-pagamento" placeholder="Ex: Pago em folha suplementar">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-bi-modal" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar BIs</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO DE BOLETINS DE SAQUE ETAPA (ADMIN) -->
+  <div id="saque-bi-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Boletins do Saque Etapa</h2>
+        <button id="btn-close-saque-bi-modal" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="form-saque-bi-save">
+        <input type="hidden" id="saque-bi-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="saque-bi-solicitacao">BI de Solicitação</label>
+            <input type="text" id="saque-bi-solicitacao" placeholder="Ex: BI 17/2026">
+          </div>
+          <div class="form-group">
+            <label for="saque-bi-pagamento">BI de Pagamento</label>
+            <input type="text" id="saque-bi-pagamento" placeholder="Ex: BI 18/2026">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="saque-bi-observacao">Observação</label>
+          <input type="text" id="saque-bi-observacao" placeholder="Ex: Pago em folha normal">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-saque-bi-modal" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar BIs</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Deslocamentos de um Militar (Admin) -->
+  <div id="modal-deslocamentos-usuario" class="modal hidden">
+    <div class="modal-content" style="max-width: 860px;">
+      <div class="modal-header">
+        <h2 id="modal-deslocamentos-titulo">Deslocamentos do Militar</h2>
+        <button id="btn-close-deslocamentos-modal" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div style="padding: 0 0 20px 0;">
+        <div class="table-responsive">
+          <table class="table" style="font-size:0.82rem;">
+            <thead>
+              <tr>
+                <th>Deslocamento</th>
+                <th>Tipo</th>
+                <th>Início</th>
+                <th>Término</th>
+                <th>Duração</th>
+                <th>Repr. / Status</th>
+              </tr>
+            </thead>
+            <tbody id="modal-deslocamentos-tbody">
+              <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO DE FÉRIAS -->
+  <div id="modal-edit-ferias" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Férias</h2>
+        <button id="btn-close-edit-ferias" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="form-edit-ferias">
+        <input type="hidden" id="edit-ferias-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-ferias-inicio">Data de Início *</label>
+            <input type="date" id="edit-ferias-inicio" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-ferias-termino">Data de Término *</label>
+            <input type="date" id="edit-ferias-termino" required>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-edit-ferias" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO DE DISPENSA -->
+  <div id="modal-edit-dispensa" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Editar Dispensa</h2>
+        <button id="btn-close-edit-dispensa" class="btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="form-edit-dispensa">
+        <input type="hidden" id="edit-dispensa-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-dispensa-inicio">Data Início *</label>
+            <input type="date" id="edit-dispensa-inicio" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-dispensa-termino">Data Término *</label>
+            <input type="date" id="edit-dispensa-termino" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-dispensa-tipo">Tipo de Dispensa *</label>
+            <select id="edit-dispensa-tipo" required>
+              <option value="missao">Decorrente de Missão</option>
+              <option value="comum">Dispensa Comum / Recompensa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-dispensa-observacao">Motivo / Observação</label>
+            <input type="text" id="edit-dispensa-observacao" placeholder="Ex: Doação de sangue">
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-edit-dispensa" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMAÇÃO CUSTOMIZADO -->
+  <div id="modal-confirmacao" class="modal hidden">
+    <div class="modal-content" style="max-width:420px; text-align:center;">
+      <div style="padding:10px 0 6px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" width="48" height="48" style="margin-bottom:12px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <h3 id="modal-confirmacao-titulo" style="margin:0 0 8px; font-size:1.1rem;">Confirmar Ação</h3>
+        <p id="modal-confirmacao-msg" style="color:var(--text-secondary); font-size:0.9rem; margin:0 0 20px;">Deseja prosseguir?</p>
+      </div>
+      <div class="modal-actions" style="justify-content:center; gap:12px;">
+        <button id="modal-confirmacao-cancelar" class="btn btn-secondary" style="min-width:100px;">Cancelar</button>
+        <button id="modal-confirmacao-confirmar" class="btn btn-danger" style="min-width:100px;">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTAINER DE IMPRESSÃO DE RELATÓRIO (Hiding on screen, displaying on print) -->
+  <div id="report-print-container" class="report-print-container">
+    <!-- Será preenchido dinamicamente via JS -->
+  </div>
+
+  <script src="app.js?v=1.0.6"></script>
+</body>
+</html>
