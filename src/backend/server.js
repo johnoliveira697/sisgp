@@ -9,6 +9,16 @@ const db = require('./db-adapter');
 
 const app = express();
 
+// Em produção, o app roda atrás de um proxy reverso (Nginx no VPS, ou o balanceador
+// do Render). Isso avisa o Express para confiar no cabeçalho X-Forwarded-For enviado
+// pelo proxy, usando o IP real do visitante (em vez do IP interno do proxy) para
+// identificar clientes — necessário para o rate limiting do login funcionar corretamente
+// e evitar o erro "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" do express-rate-limit.
+// Valor 1 = confia apenas no primeiro proxy à frente do app (o Nginx local).
+if (process.env.TRUST_PROXY !== 'false') {
+  app.set('trust proxy', 1);
+}
+
 // Ordem hierárquica dos postos e graduações do Exército, do mais alto para o mais baixo
 // (mesma ordem usada na carga inicial da tabela de soldos em database.js / init-pg.js).
 const ORDEM_POSTOS = [
