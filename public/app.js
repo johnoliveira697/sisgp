@@ -596,8 +596,8 @@ function renderMembroDashboard(data) {
     DOM.tableUserFerias.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhuma férias cadastrada.</td></tr>';
   } else {
     ferias.forEach(f => {
-      const actions = state.user && state.user.role === 'admin' 
-        ? `<td>
+      const actions = state.user && state.user.role === 'admin'
+        ? `<td data-label="Ações">
             <div style="display: flex; gap: 6px;">
              <button class="btn btn-secondary btn-icon" onclick="abrirModalEditFerias(${f.id})" title="Editar Férias">
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -607,12 +607,12 @@ function renderMembroDashboard(data) {
              </button>
             </div>
            </td>`
-        : `<td></td>`;
+        : `<td data-label="Ações"></td>`;
       DOM.tableUserFerias.innerHTML += `
         <tr>
-          <td>${formatarData(f.data_inicio)}</td>
-          <td>${formatarData(f.data_termino)}</td>
-          <td><strong>${f.dias_ferias} dias</strong></td>
+          <td data-label="Data de Início">${formatarData(f.data_inicio)}</td>
+          <td data-label="Data de Término">${formatarData(f.data_termino)}</td>
+          <td data-label="Total Dias"><strong>${f.dias_ferias} dias</strong></td>
           ${actions}
         </tr>
       `;
@@ -630,7 +630,7 @@ function renderMembroDashboard(data) {
       const tipoLabel = d.tipo_dispensa === 'comum' ? '<br><small style="color: var(--warning); font-weight: 500;">Dispensa Comum</small>' : '<br><small style="color: var(--text-muted);">Decorrente de Missão</small>';
       
       const actions = state.user && state.user.role === 'admin'
-        ? `<td>
+        ? `<td data-label="Ações">
             <div style="display: flex; gap: 6px;">
              <button class="btn btn-secondary btn-icon" onclick="abrirModalEditDispensa(${d.id})" title="Editar Dispensa">
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -640,15 +640,15 @@ function renderMembroDashboard(data) {
              </button>
             </div>
            </td>`
-        : `<td></td>`;
+        : `<td data-label="Ações"></td>`;
 
       DOM.tableUserDispensas.innerHTML += `
         <tr>
-          <td>${formatarData(d.data_inicio)}</td>
-          <td>${formatarData(d.data_termino)}</td>
-          <td><strong>${d.dias_dispensa} dias</strong>${tipoLabel}</td>
-          <td>${d.observacao || '<span class="text-muted">-</span>'}</td>
-          <td><span class="badge badge-status ${statusClass}">${d.status}</span></td>
+          <td data-label="Início">${formatarData(d.data_inicio)}</td>
+          <td data-label="Término">${formatarData(d.data_termino)}</td>
+          <td data-label="Dias"><strong>${d.dias_dispensa} dias</strong>${tipoLabel}</td>
+          <td data-label="Motivo">${d.observacao || '<span class="text-muted">-</span>'}</td>
+          <td data-label="Status"><span class="badge badge-status ${statusClass}">${d.status}</span></td>
           ${actions}
         </tr>
       `;
@@ -665,10 +665,10 @@ function renderMembroDashboard(data) {
       const statusClass = s.status.toLowerCase();
       DOM.tableUserSaquesEtapa.innerHTML += `
         <tr>
-          <td>${formatarData(s.data_inicio)}<br>até<br>${formatarData(s.data_termino)}</td>
-          <td><strong>${s.quantidade_etapas}</strong></td>
-          <td>R$ ${formatarMoeda(s.valor)}</td>
-          <td><span class="badge badge-status ${statusClass}">${s.status}</span></td>
+          <td data-label="Período">${formatarData(s.data_inicio)}<br>até<br>${formatarData(s.data_termino)}</td>
+          <td data-label="Etapas"><strong>${s.quantidade_etapas}</strong></td>
+          <td data-label="Valor">R$ ${formatarMoeda(s.valor)}</td>
+          <td data-label="Status"><span class="badge badge-status ${statusClass}">${s.status}</span></td>
         </tr>
       `;
     });
@@ -728,14 +728,14 @@ function renderMissoesComFiltro() {
       }
       DOM.tableUserMissoes.innerHTML += `
         <tr>
-          <td><strong>${m.nome_deslocamento || m.descricao}</strong></td>
-          <td>${formatarDataHora(m.data_inicio)}</td>
-          <td>${formatarDataHora(m.data_termino)}</td>
-          <td>${m.dias_missao} dias</td>
-          <td>${gratificacaoHTML}</td>
-          <td>R$ ${formatarMoeda(m.saque_alimentacao)}</td>
-          <td><span class="badge badge-role">${m.dispensas_concedidas} dias</span></td>
-          <td>
+          <td data-label="Nome da Missão"><strong>${m.nome_deslocamento || m.descricao}</strong></td>
+          <td data-label="Início">${formatarDataHora(m.data_inicio)}</td>
+          <td data-label="Término">${formatarDataHora(m.data_termino)}</td>
+          <td data-label="Duração">${m.dias_missao} dias</td>
+          <td data-label="Gratificação">${gratificacaoHTML}</td>
+          <td data-label="Saque Alimentação">R$ ${formatarMoeda(m.saque_alimentacao)}</td>
+          <td data-label="Dispensas Geradas"><span class="badge badge-role">${m.dispensas_concedidas} dias</span></td>
+          <td data-label="Ações">
             <div style="display: flex; gap: 6px;">
               <button class="btn btn-secondary btn-icon" onclick='abrirEditMissaoModal(${JSON.stringify(m)}, false)' title="Editar Deslocamento">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -919,15 +919,15 @@ function renderAdminSaquesTable(saques) {
       
     DOM.tableAdminSaquesEtapa.innerHTML += `
       <tr>
-        <td><strong>${s.nome}</strong></td>
-        <td>${s.posto_graduacao}</td>
-        <td>${formatarData(s.data_inicio)}</td>
-        <td>${formatarData(s.data_termino)}</td>
-        <td><strong>${s.quantidade_etapas}</strong></td>
-        <td>R$ ${formatarMoeda(s.valor)}</td>
-        <td>${s.observacao || '<span class="text-muted">-</span>'}${biDetails}</td>
-        <td><span class="badge badge-status ${statusClass}">${s.status}</span></td>
-        <td>${acoes}</td>
+        <td data-label="Militar"><strong>${s.nome}</strong></td>
+        <td data-label="Posto / Grad">${s.posto_graduacao}</td>
+        <td data-label="Início">${formatarData(s.data_inicio)}</td>
+        <td data-label="Término">${formatarData(s.data_termino)}</td>
+        <td data-label="Etapas"><strong>${s.quantidade_etapas}</strong></td>
+        <td data-label="Valor">R$ ${formatarMoeda(s.valor)}</td>
+        <td data-label="Obs / Detalhes">${s.observacao || '<span class="text-muted">-</span>'}${biDetails}</td>
+        <td data-label="Status"><span class="badge badge-status ${statusClass}">${s.status}</span></td>
+        <td data-label="Ações">${acoes}</td>
       </tr>
     `;
   });
@@ -961,15 +961,15 @@ function renderAdminPessoalTable() {
     
     DOM.tableAdminPessoal.innerHTML += `
       <tr>
-        <td><code>${u.matricula}</code></td>
-        <td><strong>${u.nome}</strong></td>
-        <td>${u.posto_graduacao}</td>
-        <td>R$ ${formatarMoeda(u.soldo)}</td>
-        <td>${roleBadge}</td>
-        <td>
+        <td data-label="Identidade"><code>${u.matricula}</code></td>
+        <td data-label="Nome"><strong>${u.nome}</strong></td>
+        <td data-label="Posto / Graduação">${u.posto_graduacao}</td>
+        <td data-label="Soldo Base">R$ ${formatarMoeda(u.soldo)}</td>
+        <td data-label="Tipo Acesso">${roleBadge}</td>
+        <td data-label="Saldo Dispensas">
           <span class="badge ${balanceBadgeClass}" title="Restantes / Acumuladas">${u.dispensas_restantes} / ${u.dispensas_acumuladas} dias</span>
         </td>
-        <td>
+        <td data-label="Ações">
           <div style="display: flex; gap: 6px;">
             <button class="btn btn-secondary btn-icon" onclick="editarMilitar(${u.id})" title="Editar Cadastro">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -1023,12 +1023,12 @@ window.verDeslocamentosMilitar = async function(userId, nomeUsuario) {
           : '<span style="color:var(--text-muted); font-size:0.75rem;">—</span>';
         return `
           <tr>
-            <td><strong>${m.nome_deslocamento || m.descricao || '—'}</strong></td>
-            <td><span class="badge ${tipoBadge}" style="font-size:0.7rem;">${tipo}</span></td>
-            <td style="font-size:0.8rem;">${inicio}</td>
-            <td style="font-size:0.8rem;">${termino}</td>
-            <td style="font-size:0.82rem;">${m.dias_missao} dias</td>
-            <td>
+            <td data-label="Deslocamento"><strong>${m.nome_deslocamento || m.descricao || '—'}</strong></td>
+            <td data-label="Tipo"><span class="badge ${tipoBadge}" style="font-size:0.7rem;">${tipo}</span></td>
+            <td data-label="Início" style="font-size:0.8rem;">${inicio}</td>
+            <td data-label="Término" style="font-size:0.8rem;">${termino}</td>
+            <td data-label="Duração" style="font-size:0.82rem;">${m.dias_missao} dias</td>
+            <td data-label="Repr. / Status">
               <div style="display:flex;flex-direction:column;gap:2px;">
                 <span style="font-size:0.82rem;font-weight:600;">${grat}</span>
                 ${statusGrat}
@@ -1082,14 +1082,14 @@ function renderAdminDispensasTable(dispensas) {
     
     DOM.tableAdminDispensas.innerHTML += `
       <tr>
-        <td><strong>${d.nome}</strong></td>
-        <td>${d.posto_graduacao}</td>
-        <td>${formatarData(d.data_inicio)}</td>
-        <td>${formatarData(d.data_termino)}</td>
-        <td><strong>${d.dias_dispensa} dias</strong></td>
-        <td>${d.observacao || '<span class="text-muted">-</span>'}</td>
-        <td><span class="badge badge-status ${statusClass}">${d.status}</span></td>
-        <td>${acoes}</td>
+        <td data-label="Militar"><strong>${d.nome}</strong></td>
+        <td data-label="Posto / Graduação">${d.posto_graduacao}</td>
+        <td data-label="Início">${formatarData(d.data_inicio)}</td>
+        <td data-label="Término">${formatarData(d.data_termino)}</td>
+        <td data-label="Dias Solicitados"><strong>${d.dias_dispensa} dias</strong></td>
+        <td data-label="Motivo / Observação">${d.observacao || '<span class="text-muted">-</span>'}</td>
+        <td data-label="Status"><span class="badge badge-status ${statusClass}">${d.status}</span></td>
+        <td data-label="Ações">${acoes}</td>
       </tr>
     `;
   });
@@ -2008,12 +2008,12 @@ function renderAdminPagamentosAccordion(missoes) {
       const alimentCell = cellAdmin(m.receber_saque_alimentacao==1, m.saque_alimentacao, m.alimentacao_paga,         m.id,'alimentacao_paga',  'Marcar Alimentação como Paga');
       return `
         <tr>
-          <td>${m.nome_deslocamento || m.descricao || '—'}</td>
-          <td class="text-center">${gratCell}</td>
-          <td class="text-center">${ajudaCell}</td>
-          <td class="text-center">${locCell}</td>
-          <td class="text-center">${alimentCell}</td>
-          <td class="text-center">
+          <td data-label="Deslocamento">${m.nome_deslocamento || m.descricao || '—'}</td>
+          <td data-label="Repr. (R$)" class="text-center">${gratCell}</td>
+          <td data-label="Aj. Custo (R$)" class="text-center">${ajudaCell}</td>
+          <td data-label="Localidade" class="text-center">${locCell}</td>
+          <td data-label="Alimentação (R$)" class="text-center">${alimentCell}</td>
+          <td data-label="BIs" class="text-center">
             <div style="display: flex; gap: 6px; justify-content: center;">
               <button class="btn-icon" onclick="abrirBiModal(${m.id})" title="Editar BIs" style="color:var(--text-muted);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -2089,11 +2089,11 @@ function renderMembroPagamentosTable(missoes) {
       return `<div class="pag-status-cell"><span class="pag-valor">${vf}</span><span class="${cls}">${txt}</span></div>`;
     }
     return `<tr>
-      <td><strong>${m.nome_deslocamento || m.descricao || '—'}</strong></td>
-      <td class="text-center">${cellMembro(m.pagar_gratificacao==1, m.gratificacao_representacao, m.gratificacao_paga)}</td>
-      <td class="text-center">${cellMembro(m.pagar_ajuda_custo==1,  m.ajuda_de_custo,             m.ajuda_custo_paga)}</td>
-      <td class="text-center">${cellMembro(m.gratificacao_localidade_pct>0, m.gratificacao_localidade_valor, m.localidade_paga)}</td>
-      <td class="text-center">${cellMembro(m.receber_saque_alimentacao==1, m.saque_alimentacao, m.alimentacao_paga)}</td>
+      <td data-label="Deslocamento"><strong>${m.nome_deslocamento || m.descricao || '—'}</strong></td>
+      <td data-label="Repr. (R$)" class="text-center">${cellMembro(m.pagar_gratificacao==1, m.gratificacao_representacao, m.gratificacao_paga)}</td>
+      <td data-label="Aj. Custo (R$)" class="text-center">${cellMembro(m.pagar_ajuda_custo==1,  m.ajuda_de_custo,             m.ajuda_custo_paga)}</td>
+      <td data-label="Localidade" class="text-center">${cellMembro(m.gratificacao_localidade_pct>0, m.gratificacao_localidade_valor, m.localidade_paga)}</td>
+      <td data-label="Alimentação (R$)" class="text-center">${cellMembro(m.receber_saque_alimentacao==1, m.saque_alimentacao, m.alimentacao_paga)}</td>
     </tr>`;
   }).join('');
 }
@@ -2597,11 +2597,11 @@ if (DOM.btnBuscarDestino) {
         
         DOM.tableDestinoDiarioBody.innerHTML += `
           <tr>
-            <td>${d.posto_graduacao}</td>
-            <td><strong>${d.nome}</strong></td>
-            <td><code>${d.matricula}</code></td>
-            <td><span class="badge badge-status ${d.statusClass}">${d.status}</span></td>
-            <td>${detailsHtml}</td>
+            <td data-label="Posto/Grad">${d.posto_graduacao}</td>
+            <td data-label="Nome Militar"><strong>${d.nome}</strong></td>
+            <td data-label="Identidade"><code>${d.matricula}</code></td>
+            <td data-label="Destino / Status"><span class="badge badge-status ${d.statusClass}">${d.status}</span></td>
+            <td data-label="Detalhes">${detailsHtml}</td>
           </tr>
         `;
       });
