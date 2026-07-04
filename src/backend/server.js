@@ -122,16 +122,40 @@ function authorizeAdmin(req, res, next) {
 }
 
 // Função utilitária para calcular a diferença de dias inclusive
+//
+// Dois modos de cálculo, dependendo se as datas recebidas têm horário:
+//
+// 1. COM horário (campos <input type="datetime-local">, usados em Missões/
+//    Deslocamentos): mantém a regra original — conta as horas cheias e, se a
+//    fração restante for >= 8h, soma mais um dia. Isso é intencional, pois
+//    aqui a hora de saída/chegada realmente importa para o cálculo.
+//
+// 2. SEM horário (campos <input type="date">, usados em Férias, Dispensas e
+//    Saques Etapa): conta de forma inclusiva, do primeiro ao último dia.
+//    Ex: 01/06 a 10/06 = 10 dias (01, 02, ..., 10), não 9. Uma dispensa no
+//    mesmo dia (início = término) conta como 1 dia, nunca 0.
 function calcularDias(inicio, termino) {
+  const temHorario = typeof inicio === 'string' && inicio.includes('T') &&
+                      typeof termino === 'string' && termino.includes('T');
+
+  if (!temHorario) {
+    const date1 = new Date(`${inicio}T00:00:00`);
+    const date2 = new Date(`${termino}T00:00:00`);
+    if (isNaN(date1.getTime()) || isNaN(date2.getTime()) || date2 < date1) return 0;
+
+    const diffDias = Math.round((date2 - date1) / (1000 * 60 * 60 * 24));
+    return diffDias + 1;
+  }
+
   const date1 = new Date(inicio);
   const date2 = new Date(termino);
   const diffTime = date2 - date1;
   if (diffTime <= 0) return 0;
-  
+
   const totalHours = diffTime / (1000 * 60 * 60);
   const diasCompletos = Math.floor(totalHours / 24);
   const horasRestantes = totalHours % 24;
-  
+
   // Se a fração restante de horas for >= 8h, conta como mais um dia
   return horasRestantes >= 8 ? diasCompletos + 1 : diasCompletos;
 }
