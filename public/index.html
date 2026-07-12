@@ -1093,38 +1093,30 @@
     </div>
   </div>
 
-  <!-- MODAL DE EDIÇÃO DE BOLETINS INTERNOS (ADMIN) -->
-  <div id="bi-modal" class="modal hidden">
+  <!-- MODAL DE ETAPA DO PAGAMENTO DA GRATIFICAÇÃO DE REPRESENTAÇÃO (SOMENTE ADMINISTRADOR GERAL) -->
+  <div id="etapa-grat-modal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Editar Boletins Internos (BIs)</h2>
-        <button id="btn-close-bi-modal" class="btn-icon">
+        <h2 id="etapa-grat-titulo">Etapa</h2>
+        <button id="btn-close-etapa-grat-modal" class="btn-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
-      <form id="form-bi-save">
-        <input type="hidden" id="bi-missao-id">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="bi-deslocamento">BI Deslocamento</label>
-            <input type="text" id="bi-deslocamento" placeholder="Ex: BI 12/2026">
-          </div>
-          <div class="form-group">
-            <label for="bi-retorno">BI Retorno</label>
-            <input type="text" id="bi-retorno" placeholder="Ex: BI 13/2026">
-          </div>
+      <form id="form-etapa-grat-save">
+        <input type="hidden" id="etapa-grat-missao-id">
+        <input type="hidden" id="etapa-grat-chave">
+        <div class="form-group">
+          <label for="etapa-grat-numero">Número do documento</label>
+          <input type="text" id="etapa-grat-numero" placeholder="Ex: 123/2026">
         </div>
         <div class="form-group">
-          <label for="bi-solicitacao-gratificacao">BI Solicitação Gratificação</label>
-          <input type="text" id="bi-solicitacao-gratificacao" placeholder="Ex: BI 14/2026">
-        </div>
-        <div class="form-group">
-          <label for="bi-observacao-pagamento">Observação do Pagamento</label>
-          <input type="text" id="bi-observacao-pagamento" placeholder="Ex: Pago em folha suplementar">
+          <label for="etapa-grat-data">Data</label>
+          <input type="date" id="etapa-grat-data">
         </div>
         <div class="modal-actions">
-          <button type="button" id="btn-cancel-bi-modal" class="btn btn-secondary">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar BIs</button>
+          <button type="button" id="btn-desmarcar-etapa-grat" class="btn btn-danger" style="display:none;">Desmarcar Etapa</button>
+          <button type="button" id="btn-cancel-etapa-grat-modal" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
         </div>
       </form>
     </div>

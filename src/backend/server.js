@@ -121,6 +121,16 @@ function authorizeAdmin(req, res, next) {
   next();
 }
 
+// Middleware de autorização exclusiva do Administrador Geral (super_admin).
+// Usado nas ações que só ele pode realizar, como preencher o andamento das
+// etapas de pagamento da Gratificação de Representação.
+function authorizeSuperAdmin(req, res, next) {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Acesso negado. Apenas o Administrador Geral pode realizar esta ação.' });
+  }
+  next();
+}
+
 // ----------------------------------------------------
 // CONTROLE DE ACESSO POR FRAÇÃO (SETOR)
 // ----------------------------------------------------
@@ -166,6 +176,24 @@ const checarPermissaoDispensa = checarPermissaoPorTabela('dispensas');
 const checarPermissaoSaqueEtapa = checarPermissaoPorTabela('saques_etapa');
 
 const ERRO_FRACAO = { error: 'Você não tem permissão para acessar dados de outra Fração.' };
+
+// ----------------------------------------------------
+// ETAPAS DO PAGAMENTO DA GRATIFICAÇÃO DE REPRESENTAÇÃO
+// ----------------------------------------------------
+// Pipeline burocrático sequencial que uma missão percorre até a gratificação
+// ser efetivamente paga. Cada etapa guarda o número do documento e a data
+// informados livremente pelo Administrador Geral (super_admin) — só ele pode
+// preencher/alterar isso (authorizeSuperAdmin). O modelo é sequencial: marcar
+// uma etapa mais avançada preenche automaticamente todas as anteriores (caso
+// ainda estivessem vazias); desmarcar uma etapa limpa ela e todas as
+// posteriores em cascata.
+const ETAPAS_GRATIFICACAO = [
+  { chave: 'nota_su', label: 'Nota SU' },
+  { chave: 'bi_solicitacao', label: 'BI Solicitação' },
+  { chave: 'diex_copesp', label: 'DIEx COpEsp' },
+  { chave: 'bi_concessao', label: 'BI Concessão' },
+  { chave: 'rmt_base', label: 'Rmt à Base' }
+];
 
 // Função utilitária para calcular a diferença de dias inclusive
 //
@@ -1079,35 +1107,66 @@ app.get('/api/admin/missoes', authenticateToken, authorizeAdmin, (req, res) => {
   });
 });
 
-// Atualizar boletins internos (BIs) de pagamento de uma missão
-app.put('/api/admin/missoes/:id/pagamento', authenticateToken, authorizeAdmin, (req, res) => {
+// Atualizar o andamento das etapas de pagamento da Gratificação de
+// Representação (somente o Administrador Geral pode preencher — vale para
+// todas as Frações, já que esse pipeline é acompanhado de forma centralizada).
+// Modelo sequencial: ao preencher uma etapa, todas as etapas anteriores que
+// ainda estiverem vazias são completadas automaticamente com o mesmo
+// número/data informados, para não obrigar o preenchimento retroativo de
+// cada uma. Ao limpar (desmarcar) uma etapa, ela e todas as etapas
+// posteriores são limpas também, em cascata — mantém a ordem sequencial
+// consistente.
+app.put('/api/admin/missoes/:id/etapa-gratificacao', authenticateToken, authorizeSuperAdmin, (req, res) => {
   const missaoId = req.params.id;
-  const {
-    bi_deslocamento, bi_retorno, bi_solicitacao_gratificacao, bi_autorizacao_pagamento,
-    bi_pagamento, bi_solicitacao_saque_alimentacao, bi_pagamento_saque_etapa, observacao_pagamento
-  } = req.body;
+  const { etapa, numero, data } = req.body;
 
-  checarPermissaoMissao(req, missaoId, (permErr, permitido) => {
-    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
-    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+  const indice = ETAPAS_GRATIFICACAO.findIndex(e => e.chave === etapa);
+  if (indice === -1) {
+    return res.status(400).json({ error: 'Etapa de gratificação inválida.' });
+  }
 
-    db.run(
-      `UPDATE missoes
-       SET bi_deslocamento = ?, bi_retorno = ?, bi_solicitacao_gratificacao = ?, bi_autorizacao_pagamento = ?,
-           bi_pagamento = ?, bi_solicitacao_saque_alimentacao = ?, bi_pagamento_saque_etapa = ?, observacao_pagamento = ?
-       WHERE id = ?`,
-      [
-        bi_deslocamento || '', bi_retorno || '', bi_solicitacao_gratificacao || '', bi_autorizacao_pagamento || '',
-        bi_pagamento || '', bi_solicitacao_saque_alimentacao || '', bi_pagamento_saque_etapa || '', observacao_pagamento || '',
-        missaoId
-      ],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ error: 'Erro ao atualizar dados de pagamento da missão.' });
+  const numeroLimpo = (numero || '').trim();
+  const dataLimpa = (data || '').trim();
+  const preenchendo = numeroLimpo !== '';
+
+  const colunasNumero = ETAPAS_GRATIFICACAO.map(e => `rep_${e.chave}_numero`);
+  const colunasData = ETAPAS_GRATIFICACAO.map(e => `rep_${e.chave}_data`);
+
+  db.get('SELECT * FROM missoes WHERE id = ?', [missaoId], (err, missao) => {
+    if (err) return res.status(500).json({ error: 'Erro ao buscar deslocamento.' });
+    if (!missao) return res.status(404).json({ error: 'Deslocamento não encontrado.' });
+
+    const sets = [];
+    const params = [];
+
+    if (preenchendo) {
+      for (let i = 0; i <= indice; i++) {
+        const colNum = colunasNumero[i];
+        const colData = colunasData[i];
+        const jaPreenchida = !!(missao[colNum] && String(missao[colNum]).trim() !== '');
+        if (i === indice || !jaPreenchida) {
+          sets.push(`${colNum} = ?`, `${colData} = ?`);
+          params.push(numeroLimpo, dataLimpa);
         }
-        res.json({ message: 'Dados de pagamento da missão atualizados com sucesso!' });
       }
-    );
+    } else {
+      for (let i = indice; i < ETAPAS_GRATIFICACAO.length; i++) {
+        sets.push(`${colunasNumero[i]} = ?`, `${colunasData[i]} = ?`);
+        params.push('', '');
+      }
+    }
+
+    if (sets.length === 0) {
+      return res.json({ message: 'Nenhuma alteração necessária.' });
+    }
+
+    params.push(missaoId);
+    db.run(`UPDATE missoes SET ${sets.join(', ')} WHERE id = ?`, params, function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao atualizar etapa de pagamento da gratificação.' });
+      }
+      res.json({ message: 'Etapa de pagamento atualizada com sucesso!' });
+    });
   });
 });
 

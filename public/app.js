@@ -26,6 +26,16 @@ function isSuperAdminUser(user) {
   return !!user && user.role === 'super_admin';
 }
 
+// Etapas do pagamento da Gratificação de Representação (espelha ETAPAS_GRATIFICACAO
+// do backend, em server.js). Preenchimento é exclusivo do Administrador Geral.
+const ETAPAS_GRATIFICACAO = [
+  { chave: 'nota_su', label: 'Nota SU' },
+  { chave: 'bi_solicitacao', label: 'BI Solicitação' },
+  { chave: 'diex_copesp', label: 'DIEx COpEsp' },
+  { chave: 'bi_concessao', label: 'BI Concessão' },
+  { chave: 'rmt_base', label: 'Rmt à Base' }
+];
+
 // Elementos do DOM
 const DOM = {
   toast: document.getElementById('toast'),
@@ -179,20 +189,17 @@ const DOM = {
   tablePagamentosBody: document.getElementById('table-pagamentos-body'),
   adminActionsHeader: document.querySelector('#tab-pagamentos .admin-actions-header'),
 
-  // Modal de BIs
-  biModal: document.getElementById('bi-modal'),
-  btnCloseBiModal: document.getElementById('btn-close-bi-modal'),
-  btnCancelBiModal: document.getElementById('btn-cancel-bi-modal'),
-  formBiSave: document.getElementById('form-bi-save'),
-  biMissaoId: document.getElementById('bi-missao-id'),
-  biDeslocamento: document.getElementById('bi-deslocamento'),
-  biRetorno: document.getElementById('bi-retorno'),
-  biSolicitacaoGratificacao: document.getElementById('bi-solicitacao-gratificacao'),
-  biAutorizacaoPagamento: document.getElementById('bi-autorizacao-pagamento'),
-  biPagamento: document.getElementById('bi-pagamento'),
-  biSolicitacaoSaqueAlimentacao: document.getElementById('bi-solicitacao-saque-alimentacao'),
-  biPagamentoSaqueEtapa: document.getElementById('bi-pagamento-saque-etapa'),
-  biObservacaoPagamento: document.getElementById('bi-observacao-pagamento'),
+  // Modal de etapa da Gratificação de Representação (só Administrador Geral)
+  etapaGratModal: document.getElementById('etapa-grat-modal'),
+  etapaGratTitulo: document.getElementById('etapa-grat-titulo'),
+  btnCloseEtapaGratModal: document.getElementById('btn-close-etapa-grat-modal'),
+  btnCancelEtapaGratModal: document.getElementById('btn-cancel-etapa-grat-modal'),
+  btnDesmarcarEtapaGrat: document.getElementById('btn-desmarcar-etapa-grat'),
+  formEtapaGratSave: document.getElementById('form-etapa-grat-save'),
+  etapaGratMissaoId: document.getElementById('etapa-grat-missao-id'),
+  etapaGratChave: document.getElementById('etapa-grat-chave'),
+  etapaGratNumero: document.getElementById('etapa-grat-numero'),
+  etapaGratData: document.getElementById('etapa-grat-data'),
 
   // Container de impressão
   reportPrintContainer: document.getElementById('report-print-container'),
@@ -2012,6 +2019,52 @@ function renderPagamentosTable(missoes) {
   }
 }
 
+// Renderiza a esteira de etapas do pagamento da Gratificação de Representação,
+// exibida abaixo do valor/checkbox de "Repr. (R$)" na aba Pagamentos. Todo
+// administrador (setor ou geral) enxerga o andamento; só o Administrador Geral
+// (super_admin) pode clicar para preencher ou desmarcar uma etapa — modelo
+// sequencial: só a próxima etapa pendente (ou uma já concluída, para revisão)
+// pode ser clicada.
+function renderEtapaGratificacaoStepper(m) {
+  const podeEditar = isSuperAdminUser(state.user);
+
+  let indiceProxima = ETAPAS_GRATIFICACAO.length; // nenhuma pendente = tudo concluído
+  for (let i = 0; i < ETAPAS_GRATIFICACAO.length; i++) {
+    const numero = m[`rep_${ETAPAS_GRATIFICACAO[i].chave}_numero`];
+    if (!numero || String(numero).trim() === '') { indiceProxima = i; break; }
+  }
+
+  const botoes = ETAPAS_GRATIFICACAO.map((etapa, i) => {
+    const numero = (m[`rep_${etapa.chave}_numero`] || '').trim();
+    const data = (m[`rep_${etapa.chave}_data`] || '').trim();
+    const concluida = numero !== '';
+    const isProxima = i === indiceProxima;
+    const habilitada = concluida || isProxima;
+
+    let estado = 'futura';
+    if (concluida) estado = 'concluida';
+    else if (isProxima) estado = 'proxima';
+
+    const tituloPartes = [];
+    if (numero) tituloPartes.push(`Nº ${numero}`);
+    if (data) tituloPartes.push(formatarData(data));
+    let titulo = tituloPartes.length > 0 ? tituloPartes.join(' — ') : (isProxima ? 'Clique para preencher' : 'Aguardando etapa anterior');
+    titulo = titulo.replace(/"/g, '&quot;');
+
+    const podeClicar = podeEditar && habilitada;
+    const clique = podeClicar ? `onclick="abrirEtapaGratModal(${m.id}, '${etapa.chave}')"` : '';
+    const classeExtra = podeClicar ? '' : ' somente-leitura';
+
+    const check = concluida
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"></polyline></svg> '
+      : '';
+
+    return `<button type="button" class="etapa-grat-btn ${estado}${classeExtra}" ${clique} title="${titulo}">${check}${etapa.label}</button>`;
+  }).join('');
+
+  return `<div class="etapa-grat-row">${botoes}</div>`;
+}
+
 // ── ADMIN: Accordion agrupado por militar ─────────────────────────────────
 function renderAdminPagamentosAccordion(missoes) {
   const accordion = document.getElementById('pagamentos-accordion');
@@ -2095,15 +2148,15 @@ function renderAdminPagamentosAccordion(missoes) {
       return `
         <tr>
           <td data-label="Deslocamento">${m.nome_deslocamento || m.descricao || '—'}</td>
-          <td data-label="Repr. (R$)" class="text-center">${gratCell}</td>
+          <td data-label="Repr. (R$)" class="text-center">
+            ${gratCell}
+            ${m.pagar_gratificacao == 1 ? renderEtapaGratificacaoStepper(m) : ''}
+          </td>
           <td data-label="Aj. Custo (R$)" class="text-center">${ajudaCell}</td>
           <td data-label="Localidade" class="text-center">${locCell}</td>
           <td data-label="Alimentação (R$)" class="text-center">${alimentCell}</td>
-          <td data-label="BIs" class="text-center">
+          <td data-label="Ações" class="text-center">
             <div style="display: flex; gap: 6px; justify-content: center;">
-              <button class="btn-icon" onclick="abrirBiModal(${m.id})" title="Editar BIs" style="color:var(--text-muted);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-              </button>
               <button class="btn btn-secondary btn-icon" onclick='abrirEditMissaoModal(${JSON.stringify(m).replace(/'/g, "&#39;")}, true)' title="Editar Deslocamento" style="padding:4px;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               </button>
@@ -2143,7 +2196,7 @@ function renderAdminPagamentosAccordion(missoes) {
                 <th class="text-center">Aj. Custo (R$)</th>
                 <th class="text-center">Localidade</th>
                 <th class="text-center">Alimentação (R$)</th>
-                <th class="text-center">BIs</th>
+                <th class="text-center">Ações</th>
               </tr>
             </thead>
             <tbody>${linhas}</tbody>
@@ -2228,49 +2281,88 @@ window.toggleGratificacaoPaga = async function(id, checked) {
   }
 };
 
-// Abrir modal de edição de BIs
-window.abrirBiModal = function(id) {
-  const missao = state.missoesPagamento.find(m => m.id === id);
+// Abrir modal de etapa da Gratificação de Representação (só Administrador Geral)
+window.abrirEtapaGratModal = function(missaoId, chave) {
+  if (!isSuperAdminUser(state.user)) return;
+
+  const missao = state.missoesPagamento.find(m => m.id === missaoId);
   if (!missao) return;
-  
-  DOM.biMissaoId.value = missao.id;
-  DOM.biDeslocamento.value = missao.bi_deslocamento || '';
-  DOM.biRetorno.value = missao.bi_retorno || '';
-  DOM.biSolicitacaoGratificacao.value = missao.bi_solicitacao_gratificacao || '';
-  DOM.biObservacaoPagamento.value = missao.observacao_pagamento || '';
-  
-  DOM.biModal.classList.remove('hidden');
+
+  const etapa = ETAPAS_GRATIFICACAO.find(e => e.chave === chave);
+  if (!etapa) return;
+
+  const numeroAtual = missao[`rep_${chave}_numero`] || '';
+  const dataAtual = missao[`rep_${chave}_data`] || '';
+
+  DOM.etapaGratTitulo.textContent = etapa.label;
+  DOM.etapaGratMissaoId.value = missaoId;
+  DOM.etapaGratChave.value = chave;
+  DOM.etapaGratNumero.value = numeroAtual;
+  DOM.etapaGratData.value = dataAtual;
+
+  if (DOM.btnDesmarcarEtapaGrat) {
+    DOM.btnDesmarcarEtapaGrat.style.display = numeroAtual.trim() !== '' ? '' : 'none';
+  }
+
+  DOM.etapaGratModal.classList.remove('hidden');
 };
 
-// Fechar modal de BIs
-function fecharBiModal() {
-  DOM.biModal.classList.add('hidden');
+// Fechar modal de etapa da Gratificação de Representação
+function fecharEtapaGratModal() {
+  DOM.etapaGratModal.classList.add('hidden');
 }
-if (DOM.btnCloseBiModal) DOM.btnCloseBiModal.addEventListener('click', fecharBiModal);
-if (DOM.btnCancelBiModal) DOM.btnCancelBiModal.addEventListener('click', fecharBiModal);
+if (DOM.btnCloseEtapaGratModal) DOM.btnCloseEtapaGratModal.addEventListener('click', fecharEtapaGratModal);
+if (DOM.btnCancelEtapaGratModal) DOM.btnCancelEtapaGratModal.addEventListener('click', fecharEtapaGratModal);
 
-// Salvar BIs
-if (DOM.formBiSave) {
-  DOM.formBiSave.addEventListener('submit', async (e) => {
+// Salvar (preencher) a etapa selecionada
+if (DOM.formEtapaGratSave) {
+  DOM.formEtapaGratSave.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
-    const id = DOM.biMissaoId.value;
-    const body = {
-      bi_deslocamento: DOM.biDeslocamento.value.trim(),
-      bi_retorno: DOM.biRetorno.value.trim(),
-      bi_solicitacao_gratificacao: DOM.biSolicitacaoGratificacao.value.trim(),
-      observacao_pagamento: DOM.biObservacaoPagamento.value.trim()
-    };
-    
+
+    const id = DOM.etapaGratMissaoId.value;
+    const etapa = DOM.etapaGratChave.value;
+    const numero = DOM.etapaGratNumero.value.trim();
+
+    if (numero === '') {
+      showToast('Informe o número do documento.', 'error');
+      return;
+    }
+
     try {
-      const data = await apiFetch(`/admin/missoes/${id}/pagamento`, {
+      const data = await apiFetch(`/admin/missoes/${id}/etapa-gratificacao`, {
         method: 'PUT',
-        body: JSON.stringify(body)
+        body: JSON.stringify({ etapa, numero, data: DOM.etapaGratData.value })
       });
-      
+
       showToast(data.message);
-      fecharBiModal();
-      loadUserData();
+      fecharEtapaGratModal();
+      loadAndRenderPagamentos();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+}
+
+// Desmarcar a etapa selecionada (limpa ela e as posteriores, em cascata)
+if (DOM.btnDesmarcarEtapaGrat) {
+  DOM.btnDesmarcarEtapaGrat.addEventListener('click', async () => {
+    const id = DOM.etapaGratMissaoId.value;
+    const etapa = DOM.etapaGratChave.value;
+    const etapaInfo = ETAPAS_GRATIFICACAO.find(e => e.chave === etapa);
+
+    if (!confirm(`Tem certeza que deseja desmarcar a etapa "${etapaInfo ? etapaInfo.label : etapa}"? As etapas seguintes também serão desmarcadas.`)) {
+      return;
+    }
+
+    try {
+      const data = await apiFetch(`/admin/missoes/${id}/etapa-gratificacao`, {
+        method: 'PUT',
+        body: JSON.stringify({ etapa, numero: '', data: '' })
+      });
+
+      showToast(data.message);
+      fecharEtapaGratModal();
+      loadAndRenderPagamentos();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -2772,8 +2864,8 @@ window.addEventListener('click', (e) => {
   if (e.target === DOM.userModal) {
     fecharUserModal();
   }
-  if (e.target === DOM.biModal) {
-    fecharBiModal();
+  if (e.target === DOM.etapaGratModal) {
+    fecharEtapaGratModal();
   }
   if (e.target === DOM.saqueBiModal) {
     fecharSaqueBiModal();

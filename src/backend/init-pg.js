@@ -91,9 +91,42 @@ async function initPg() {
         bi_solicitacao_gratificacao TEXT DEFAULT '',
         receber_saque_alimentacao INTEGER DEFAULT 0,
         dias_saque_alimentacao INTEGER DEFAULT 0,
-        qtd_saque_alimentacao INTEGER DEFAULT 0
+        qtd_saque_alimentacao INTEGER DEFAULT 0,
+        rep_nota_su_numero TEXT DEFAULT '',
+        rep_nota_su_data TEXT DEFAULT '',
+        rep_bi_solicitacao_numero TEXT DEFAULT '',
+        rep_bi_solicitacao_data TEXT DEFAULT '',
+        rep_diex_copesp_numero TEXT DEFAULT '',
+        rep_diex_copesp_data TEXT DEFAULT '',
+        rep_bi_concessao_numero TEXT DEFAULT '',
+        rep_bi_concessao_data TEXT DEFAULT '',
+        rep_rmt_base_numero TEXT DEFAULT '',
+        rep_rmt_base_data TEXT DEFAULT ''
       )
     `);
+
+    // Migração: bancos já existentes (criados antes desta mudança) não têm as
+    // colunas das etapas de pagamento da Gratificação de Representação.
+    // Adiciona qualquer uma que ainda esteja faltando — idempotente, roda a
+    // cada boot sem custo relevante.
+    const colunasEtapasGratificacao = [
+      'rep_nota_su_numero', 'rep_nota_su_data',
+      'rep_bi_solicitacao_numero', 'rep_bi_solicitacao_data',
+      'rep_diex_copesp_numero', 'rep_diex_copesp_data',
+      'rep_bi_concessao_numero', 'rep_bi_concessao_data',
+      'rep_rmt_base_numero', 'rep_rmt_base_data'
+    ];
+    const { rows: colunasMissoesExistentes } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'missoes'
+    `);
+    const nomesExistentes = colunasMissoesExistentes.map(r => r.column_name);
+    for (const coluna of colunasEtapasGratificacao) {
+      if (!nomesExistentes.includes(coluna)) {
+        await client.query(`ALTER TABLE missoes ADD COLUMN ${coluna} TEXT DEFAULT ''`);
+        console.log(`Coluna ${coluna} adicionada a missoes.`);
+      }
+    }
 
     // 4. Férias
     await client.query(`

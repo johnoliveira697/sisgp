@@ -227,6 +227,7 @@ body {
   font-weight: 600;
   border-radius: 999px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .badge-role {
@@ -926,6 +927,56 @@ body {
   accent-color: var(--primary);
 }
 
+/* === ESTEIRA DE ETAPAS DO PAGAMENTO DA GRATIFICAÇÃO DE REPRESENTAÇÃO === */
+.etapa-grat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.etapa-grat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: default;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.etapa-grat-btn.concluida {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.etapa-grat-btn.proxima {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.etapa-grat-btn.futura {
+  opacity: 0.55;
+}
+
+.etapa-grat-btn:not(.somente-leitura) {
+  cursor: pointer;
+}
+
+.etapa-grat-btn:not(.somente-leitura):hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
 /* === ACCORDION DE PAGAMENTOS POR MILITAR === */
 .pag-accordion-item {
   background: var(--bg-card);
@@ -1375,6 +1426,11 @@ body {
   .pag-summary-chip {
     font-size: 0.68rem;
     padding: 2px 8px;
+  }
+  .etapa-grat-btn {
+    font-size: 0.6rem;
+    padding: 3px 8px;
+    min-height: 22px;
   }
   .card-header-actions,
   .card-header {

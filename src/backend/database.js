@@ -216,7 +216,20 @@ function updateSchema(db) {
     { name: 'dias_gratificacao', type: 'INTEGER DEFAULT 0' },
     { name: 'receber_saque_alimentacao', type: 'INTEGER DEFAULT 0' },
     { name: 'dias_saque_alimentacao', type: 'INTEGER DEFAULT 0' },
-    { name: 'qtd_saque_alimentacao', type: 'INTEGER DEFAULT 0' }
+    { name: 'qtd_saque_alimentacao', type: 'INTEGER DEFAULT 0' },
+    // Etapas do pagamento da Gratificação de Representação (preenchidas
+    // apenas pelo Administrador Geral). Cada etapa guarda número do
+    // documento + data, em texto livre.
+    { name: 'rep_nota_su_numero', type: 'TEXT' },
+    { name: 'rep_nota_su_data', type: 'TEXT' },
+    { name: 'rep_bi_solicitacao_numero', type: 'TEXT' },
+    { name: 'rep_bi_solicitacao_data', type: 'TEXT' },
+    { name: 'rep_diex_copesp_numero', type: 'TEXT' },
+    { name: 'rep_diex_copesp_data', type: 'TEXT' },
+    { name: 'rep_bi_concessao_numero', type: 'TEXT' },
+    { name: 'rep_bi_concessao_data', type: 'TEXT' },
+    { name: 'rep_rmt_base_numero', type: 'TEXT' },
+    { name: 'rep_rmt_base_data', type: 'TEXT' }
   ];
 
   db.all('PRAGMA table_info(missoes)', (err, rows) => {
