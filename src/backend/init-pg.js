@@ -37,9 +37,24 @@ async function initPg() {
         soldo REAL NOT NULL,
         role TEXT NOT NULL DEFAULT 'membro',
         saldo_inicial_dispensas INTEGER DEFAULT 0,
-        observacao TEXT DEFAULT ''
+        observacao TEXT DEFAULT '',
+        fracao TEXT DEFAULT ''
       )
     `);
+
+    // Migração: bancos criados antes desta mudança não têm a coluna fracao.
+    // Adiciona a coluna e, no mesmo passo, promove os administradores já
+    // existentes a "super_admin" (mantém o acesso irrestrito que já tinham).
+    // Como o guard verifica a existência da coluna, isso roda uma única vez.
+    const { rows: colunaFracao } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'usuarios' AND column_name = 'fracao'
+    `);
+    if (colunaFracao.length === 0) {
+      await client.query("ALTER TABLE usuarios ADD COLUMN fracao TEXT DEFAULT ''");
+      await client.query("UPDATE usuarios SET role = 'super_admin' WHERE role = 'admin'");
+      console.log('Coluna fracao adicionada e administradores existentes promovidos a super_admin.');
+    }
 
     // 3. Missões (deslocamentos)
     await client.query(`
@@ -156,7 +171,7 @@ async function initPg() {
       await client.query(
         `INSERT INTO usuarios (matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        ['admin', 'Administrador Geral', hash, 'Coronel', 12505.00, 'admin', 0]
+        ['admin', 'Administrador Geral', hash, 'Coronel', 12505.00, 'super_admin', 0]
       );
       console.log('');
       console.log('⚠️  ============================================================');

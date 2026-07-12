@@ -113,13 +113,59 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Middleware de autorização para Administrador
+// Middleware de autorização para Administrador (admin de setor OU super_admin)
 function authorizeAdmin(req, res, next) {
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem realizar esta ação.' });
   }
   next();
 }
+
+// ----------------------------------------------------
+// CONTROLE DE ACESSO POR FRAÇÃO (SETOR)
+// ----------------------------------------------------
+// Lista fixa de Frações (setores). Usada para validar o cadastro de usuários
+// e alimentar o select do painel administrativo.
+const FRACOES = ['3º DOFEsp', '4º DOFEsp', '5º DOFEsp', 'Seç Cmdo'];
+
+// Um "super_admin" enxerga e administra o sistema inteiro (todas as Frações).
+// Um "admin" comum só enxerga e administra usuários e lançamentos da própria
+// Fração — é o que permite dividir a administração por setor.
+function isSuperAdmin(req) {
+  return req.user.role === 'super_admin';
+}
+
+// Verifica se o admin logado tem permissão para atuar sobre o usuário de id
+// `usuarioId` (super_admin sempre pode; admin de setor só se a Fração bater).
+function checarPermissaoUsuario(req, usuarioId, callback) {
+  if (isSuperAdmin(req)) return callback(null, true);
+  db.get('SELECT fracao FROM usuarios WHERE id = ?', [usuarioId], (err, row) => {
+    if (err) return callback(err, false);
+    if (!row) return callback(null, false);
+    callback(null, row.fracao === req.user.fracao);
+  });
+}
+
+// Gera uma função de checagem de permissão para registros de uma tabela que
+// possui coluna usuario_id (missoes, ferias, dispensas, saques_etapa): busca
+// o dono do registro e reaproveita checarPermissaoUsuario.
+function checarPermissaoPorTabela(tabela) {
+  return function (req, registroId, callback) {
+    if (isSuperAdmin(req)) return callback(null, true);
+    db.get(`SELECT usuario_id FROM ${tabela} WHERE id = ?`, [registroId], (err, row) => {
+      if (err) return callback(err, false);
+      if (!row) return callback(null, false);
+      checarPermissaoUsuario(req, row.usuario_id, callback);
+    });
+  };
+}
+
+const checarPermissaoMissao = checarPermissaoPorTabela('missoes');
+const checarPermissaoFerias = checarPermissaoPorTabela('ferias');
+const checarPermissaoDispensa = checarPermissaoPorTabela('dispensas');
+const checarPermissaoSaqueEtapa = checarPermissaoPorTabela('saques_etapa');
+
+const ERRO_FRACAO = { error: 'Você não tem permissão para acessar dados de outra Fração.' };
 
 // Função utilitária para calcular a diferença de dias inclusive
 //
@@ -239,7 +285,7 @@ app.post('/api/login', loginLimiter, (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, matricula: user.matricula, role: user.role, nome: user.nome },
+      { id: user.id, matricula: user.matricula, role: user.role, nome: user.nome, fracao: user.fracao || '' },
       JWT_SECRET,
       { expiresIn: '2h' }
     );
@@ -252,7 +298,8 @@ app.post('/api/login', loginLimiter, (req, res) => {
         nome: user.nome,
         posto_graduacao: user.posto_graduacao,
         soldo: user.soldo,
-        role: user.role
+        role: user.role,
+        fracao: user.fracao || ''
       }
     });
   });
@@ -272,6 +319,13 @@ app.get('/api/soldos', (req, res) => {
   });
 });
 
+// Obter a lista de Frações (setores) cadastradas, para alimentar o select do
+// painel administrativo. Só admins precisam disso (é usado no cadastro/edição
+// de militares no painel de administração).
+app.get('/api/fracoes', authenticateToken, authorizeAdmin, (req, res) => {
+  res.json(FRACOES);
+});
+
 // Rota de Cadastro Público (Desativada - apenas admin pode cadastrar militares)
 app.post('/api/signup', (req, res) => {
   return res.status(403).json({ error: 'O cadastro público está desativado. Entre em contato com o Administrador do sistema para ser cadastrado.' });
@@ -282,7 +336,7 @@ app.get('/api/membro/resumo', authenticateToken, (req, res) => {
   const userId = req.user.id;
 
   // Buscar dados do usuário
-  db.get('SELECT id, matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas FROM usuarios WHERE id = ?', [userId], (err, user) => {
+  db.get('SELECT id, matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas, fracao FROM usuarios WHERE id = ?', [userId], (err, user) => {
     if (err || !user) {
       return res.status(500).json({ error: 'Erro ao buscar dados do usuário.' });
     }
@@ -375,15 +429,18 @@ app.post('/api/membro/dispensas', authenticateToken, (req, res) => {
 
 // Obter todos os usuários (pessoal) com resumo rápido de saldo de dispensas
 app.get('/api/admin/usuarios', authenticateToken, authorizeAdmin, (req, res) => {
+  const scoped = !isSuperAdmin(req);
   const query = `
-    SELECT u.id, u.matricula, u.nome, u.posto_graduacao, u.soldo, u.role, u.saldo_inicial_dispensas, u.observacao,
+    SELECT u.id, u.matricula, u.nome, u.posto_graduacao, u.soldo, u.role, u.saldo_inicial_dispensas, u.observacao, u.fracao,
       (SELECT COALESCE(SUM(m.dispensas_concedidas), 0) FROM missoes m WHERE m.usuario_id = u.id) as dispensas_missoes,
       (SELECT COALESCE(SUM(d.dias_dispensa), 0) FROM dispensas d WHERE d.usuario_id = u.id AND d.status = 'Aprovada') as dispensas_utilizadas
     FROM usuarios u
+    ${scoped ? 'WHERE u.fracao = ?' : ''}
     ORDER BY ${ordemPostoSql('u')} ASC, u.nome ASC
   `;
+  const params = scoped ? [req.user.fracao] : [];
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao listar usuários.' });
     }
@@ -400,6 +457,7 @@ app.get('/api/admin/usuarios', authenticateToken, authorizeAdmin, (req, res) => 
         role: u.role,
         saldo_inicial_dispensas: u.saldo_inicial_dispensas,
         observacao: u.observacao || '',
+        fracao: u.fracao || '',
         dispensas_acumuladas: acumuladas,
         dispensas_utilizadas: u.dispensas_utilizadas,
         dispensas_restantes: restantes
@@ -413,18 +471,31 @@ app.get('/api/admin/usuarios', authenticateToken, authorizeAdmin, (req, res) => 
 // Cadastrar novo militar (usuário)
 app.post('/api/admin/usuarios', authenticateToken, authorizeAdmin, (req, res) => {
   const { matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao } = req.body;
+  let { fracao } = req.body;
 
   if (!matricula || !nome || !senha || !posto_graduacao || soldo === undefined) {
     return res.status(400).json({ error: 'Todos os campos obrigatórios devem ser preenchidos.' });
+  }
+
+  if (isSuperAdmin(req)) {
+    if (!fracao || !FRACOES.includes(fracao)) {
+      return res.status(400).json({ error: 'Selecione uma Fração válida.' });
+    }
+  } else {
+    // Admin de setor só cadastra gente na própria Fração e nunca cria um Administrador Geral.
+    fracao = req.user.fracao;
+    if (role === 'super_admin') {
+      return res.status(403).json({ error: 'Você não tem permissão para criar um Administrador Geral.' });
+    }
   }
 
   const salt = bcrypt.genSaltSync(10);
   const hashSenha = bcrypt.hashSync(senha, salt);
 
   db.run(
-    `INSERT INTO usuarios (matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [matricula, nome, hashSenha, posto_graduacao, soldo, role || 'membro', saldo_inicial_dispensas || 0, observacao || ''],
+    `INSERT INTO usuarios (matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao, fracao)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [matricula, nome, hashSenha, posto_graduacao, soldo, role || 'membro', saldo_inicial_dispensas || 0, observacao || '', fracao],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -441,56 +512,78 @@ app.post('/api/admin/usuarios', authenticateToken, authorizeAdmin, (req, res) =>
 app.put('/api/admin/usuarios/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const userId = req.params.id;
   const { matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao } = req.body;
+  let { fracao } = req.body;
 
   if (!matricula || !nome || !posto_graduacao || soldo === undefined) {
     return res.status(400).json({ error: 'Campos matrícula, nome, posto e soldo são obrigatórios.' });
   }
 
-  // Se a senha foi fornecida, atualiza a senha também
-  if (senha && senha.trim() !== '') {
-    const salt = bcrypt.genSaltSync(10);
-    const hashSenha = bcrypt.hashSync(senha, salt);
+  checarPermissaoUsuario(req, userId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
 
-    db.run(
-      `UPDATE usuarios 
-       SET matricula = ?, nome = ?, senha = ?, posto_graduacao = ?, soldo = ?, role = ?, saldo_inicial_dispensas = ?, observacao = ? 
-       WHERE id = ?`,
-      [matricula, nome, hashSenha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao || '', userId],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'Esta matrícula já está sendo usada por outro usuário.' });
-          }
-          return res.status(500).json({ error: 'Erro ao atualizar usuário.' });
-        }
-        res.json({ message: 'Usuário e senha atualizados com sucesso!' });
+    if (isSuperAdmin(req)) {
+      if (!fracao || !FRACOES.includes(fracao)) {
+        return res.status(400).json({ error: 'Selecione uma Fração válida.' });
       }
-    );
-  } else {
-    // Atualizar sem alterar a senha
-    db.run(
-      `UPDATE usuarios 
-       SET matricula = ?, nome = ?, posto_graduacao = ?, soldo = ?, role = ?, saldo_inicial_dispensas = ?, observacao = ? 
-       WHERE id = ?`,
-      [matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao || '', userId],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'Esta matrícula já está sendo usada por outro usuário.' });
-          }
-          return res.status(500).json({ error: 'Erro ao atualizar usuário.' });
-        }
-        res.json({ message: 'Usuário atualizado com sucesso!' });
+    } else {
+      // Admin de setor não pode mudar a Fração do militar nem promovê-lo a Administrador Geral.
+      fracao = req.user.fracao;
+      if (role === 'super_admin') {
+        return res.status(403).json({ error: 'Você não tem permissão para definir esse tipo de acesso.' });
       }
-    );
-  }
+    }
+
+    // Se a senha foi fornecida, atualiza a senha também
+    if (senha && senha.trim() !== '') {
+      const salt = bcrypt.genSaltSync(10);
+      const hashSenha = bcrypt.hashSync(senha, salt);
+
+      db.run(
+        `UPDATE usuarios
+         SET matricula = ?, nome = ?, senha = ?, posto_graduacao = ?, soldo = ?, role = ?, saldo_inicial_dispensas = ?, observacao = ?, fracao = ?
+         WHERE id = ?`,
+        [matricula, nome, hashSenha, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao || '', fracao, userId],
+        function (err) {
+          if (err) {
+            if (err.message.includes('UNIQUE constraint failed')) {
+              return res.status(400).json({ error: 'Esta matrícula já está sendo usada por outro usuário.' });
+            }
+            return res.status(500).json({ error: 'Erro ao atualizar usuário.' });
+          }
+          res.json({ message: 'Usuário e senha atualizados com sucesso!' });
+        }
+      );
+    } else {
+      // Atualizar sem alterar a senha
+      db.run(
+        `UPDATE usuarios
+         SET matricula = ?, nome = ?, posto_graduacao = ?, soldo = ?, role = ?, saldo_inicial_dispensas = ?, observacao = ?, fracao = ?
+         WHERE id = ?`,
+        [matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas, observacao || '', fracao, userId],
+        function (err) {
+          if (err) {
+            if (err.message.includes('UNIQUE constraint failed')) {
+              return res.status(400).json({ error: 'Esta matrícula já está sendo usada por outro usuário.' });
+            }
+            return res.status(500).json({ error: 'Erro ao atualizar usuário.' });
+          }
+          res.json({ message: 'Usuário atualizado com sucesso!' });
+        }
+      );
+    }
+  });
 });
 
 // Obter resumo de um militar específico (para uso do administrador ao gerar relatórios)
 app.get('/api/admin/usuarios/:id/resumo', authenticateToken, authorizeAdmin, (req, res) => {
   const userId = req.params.id;
 
-  db.get('SELECT id, matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas FROM usuarios WHERE id = ?', [userId], (err, user) => {
+  checarPermissaoUsuario(req, userId, (permErr, permitido) => {
+  if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+  if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+  db.get('SELECT id, matricula, nome, posto_graduacao, soldo, role, saldo_inicial_dispensas, fracao FROM usuarios WHERE id = ?', [userId], (err, user) => {
     if (err || !user) {
       return res.status(404).json({ error: 'Militar não encontrado.' });
     }
@@ -538,6 +631,7 @@ app.get('/api/admin/usuarios/:id/resumo', authenticateToken, authorizeAdmin, (re
       });
     });
   });
+  });
 });
 
 // Excluir militar
@@ -549,11 +643,16 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, authorizeAdmin, (req, r
     return res.status(400).json({ error: 'Não é possível excluir o próprio usuário logado.' });
   }
 
-  db.run('DELETE FROM usuarios WHERE id = ?', [userId], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao excluir usuário.' });
-    }
-    res.json({ message: 'Usuário excluído com sucesso!' });
+  checarPermissaoUsuario(req, userId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run('DELETE FROM usuarios WHERE id = ?', [userId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao excluir usuário.' });
+      }
+      res.json({ message: 'Usuário excluído com sucesso!' });
+    });
   });
 });
 
@@ -575,6 +674,10 @@ app.post('/api/admin/missoes', authenticateToken, authorizeAdmin, (req, res) => 
   if (dias <= 0) {
     return res.status(400).json({ error: 'A data e hora de término devem ser posteriores à data e hora de início.' });
   }
+
+  checarPermissaoUsuario(req, usuario_id, (permErr, permitido) => {
+  if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+  if (!permitido) return res.status(403).json(ERRO_FRACAO);
 
   // Buscar o soldo do usuário para calcular a Gratificação de Representação e Ajuda de Custo
   db.get('SELECT soldo FROM usuarios WHERE id = ?', [usuario_id], (err, user) => {
@@ -649,6 +752,7 @@ app.post('/api/admin/missoes', authenticateToken, authorizeAdmin, (req, res) => 
       }
     );
   });
+  });
 });
 
 // Editar deslocamento existente (Admin)
@@ -677,6 +781,16 @@ app.put('/api/admin/missoes/:id', authenticateToken, authorizeAdmin, (req, res) 
       return res.status(404).json({ error: 'Deslocamento não encontrado.' });
     }
     const finalUsuarioId = usuario_id || missao.usuario_id;
+
+    // Precisa ter permissão tanto sobre o dono atual da missão quanto sobre o
+    // novo destinatário (caso o admin esteja reatribuindo a missão a outro militar).
+    checarPermissaoUsuario(req, missao.usuario_id, (permErr1, permitido1) => {
+    if (permErr1) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido1) return res.status(403).json(ERRO_FRACAO);
+
+    checarPermissaoUsuario(req, finalUsuarioId, (permErr2, permitido2) => {
+    if (permErr2) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido2) return res.status(403).json(ERRO_FRACAO);
 
     db.get('SELECT soldo FROM usuarios WHERE id = ?', [finalUsuarioId], (err, user) => {
       if (err || !user) {
@@ -742,6 +856,8 @@ app.put('/api/admin/missoes/:id', authenticateToken, authorizeAdmin, (req, res) 
           res.json({ message: 'Deslocamento atualizado com sucesso!' });
         }
       );
+    });
+    });
     });
   });
 });
@@ -928,26 +1044,34 @@ app.put('/api/admin/missoes/:id/toggle_pagamento', authenticateToken, authorizeA
     return res.status(400).json({ error: 'Campo de pagamento inválido.' });
   }
 
-  db.run(`UPDATE missoes SET ${campo} = ? WHERE id = ?`, [valor ? 1 : 0, id], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao atualizar status do pagamento.' });
-    }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Deslocamento não encontrado.' });
-    }
-    res.json({ message: 'Status do pagamento atualizado com sucesso!' });
+  checarPermissaoMissao(req, id, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(`UPDATE missoes SET ${campo} = ? WHERE id = ?`, [valor ? 1 : 0, id], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao atualizar status do pagamento.' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Deslocamento não encontrado.' });
+      }
+      res.json({ message: 'Status do pagamento atualizado com sucesso!' });
+    });
   });
 });
 
 // Listar todas as missões com dados de usuários (para o Administrador na aba Pagamentos)
 app.get('/api/admin/missoes', authenticateToken, authorizeAdmin, (req, res) => {
+  const scoped = !isSuperAdmin(req);
   const query = `
-    SELECT m.*, u.nome, u.posto_graduacao 
-    FROM missoes m 
-    JOIN usuarios u ON m.usuario_id = u.id 
+    SELECT m.*, u.nome, u.posto_graduacao
+    FROM missoes m
+    JOIN usuarios u ON m.usuario_id = u.id
+    ${scoped ? 'WHERE u.fracao = ?' : ''}
     ORDER BY m.data_inicio DESC
   `;
-  db.all(query, [], (err, rows) => {
+  const params = scoped ? [req.user.fracao] : [];
+  db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao obter todas as missões.' });
     }
@@ -963,33 +1087,43 @@ app.put('/api/admin/missoes/:id/pagamento', authenticateToken, authorizeAdmin, (
     bi_pagamento, bi_solicitacao_saque_alimentacao, bi_pagamento_saque_etapa, observacao_pagamento
   } = req.body;
 
-  db.run(
-    `UPDATE missoes 
-     SET bi_deslocamento = ?, bi_retorno = ?, bi_solicitacao_gratificacao = ?, bi_autorizacao_pagamento = ?,
-         bi_pagamento = ?, bi_solicitacao_saque_alimentacao = ?, bi_pagamento_saque_etapa = ?, observacao_pagamento = ? 
-     WHERE id = ?`,
-    [
-      bi_deslocamento || '', bi_retorno || '', bi_solicitacao_gratificacao || '', bi_autorizacao_pagamento || '',
-      bi_pagamento || '', bi_solicitacao_saque_alimentacao || '', bi_pagamento_saque_etapa || '', observacao_pagamento || '',
-      missaoId
-    ],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao atualizar dados de pagamento da missão.' });
+  checarPermissaoMissao(req, missaoId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      `UPDATE missoes
+       SET bi_deslocamento = ?, bi_retorno = ?, bi_solicitacao_gratificacao = ?, bi_autorizacao_pagamento = ?,
+           bi_pagamento = ?, bi_solicitacao_saque_alimentacao = ?, bi_pagamento_saque_etapa = ?, observacao_pagamento = ?
+       WHERE id = ?`,
+      [
+        bi_deslocamento || '', bi_retorno || '', bi_solicitacao_gratificacao || '', bi_autorizacao_pagamento || '',
+        bi_pagamento || '', bi_solicitacao_saque_alimentacao || '', bi_pagamento_saque_etapa || '', observacao_pagamento || '',
+        missaoId
+      ],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao atualizar dados de pagamento da missão.' });
+        }
+        res.json({ message: 'Dados de pagamento da missão atualizados com sucesso!' });
       }
-      res.json({ message: 'Dados de pagamento da missão atualizados com sucesso!' });
-    }
-  );
+    );
+  });
 });
 
 // Remover Missão
 app.delete('/api/admin/missoes/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const missaoId = req.params.id;
-  db.run('DELETE FROM missoes WHERE id = ?', [missaoId], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao remover missão.' });
-    }
-    res.json({ message: 'Missão removida com sucesso!' });
+  checarPermissaoMissao(req, missaoId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run('DELETE FROM missoes WHERE id = ?', [missaoId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao remover missão.' });
+      }
+      res.json({ message: 'Missão removida com sucesso!' });
+    });
   });
 });
 
@@ -1006,27 +1140,37 @@ app.post('/api/admin/ferias', authenticateToken, authorizeAdmin, (req, res) => {
     return res.status(400).json({ error: 'A data de término deve ser igual ou posterior à data de início.' });
   }
 
-  db.run(
-    `INSERT INTO ferias (usuario_id, data_inicio, data_termino, dias_ferias) 
-     VALUES (?, ?, ?, ?)`,
-    [usuario_id, data_inicio, data_termino, dias],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao registrar férias.' });
+  checarPermissaoUsuario(req, usuario_id, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      `INSERT INTO ferias (usuario_id, data_inicio, data_termino, dias_ferias)
+       VALUES (?, ?, ?, ?)`,
+      [usuario_id, data_inicio, data_termino, dias],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao registrar férias.' });
+        }
+        res.json({ id: this.lastID, message: 'Férias registradas com sucesso!' });
       }
-      res.json({ id: this.lastID, message: 'Férias registradas com sucesso!' });
-    }
-  );
+    );
+  });
 });
 
 // Remover Férias
 app.delete('/api/admin/ferias/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const feriasId = req.params.id;
-  db.run('DELETE FROM ferias WHERE id = ?', [feriasId], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao remover férias.' });
-    }
-    res.json({ message: 'Férias removidas com sucesso!' });
+  checarPermissaoFerias(req, feriasId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run('DELETE FROM ferias WHERE id = ?', [feriasId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao remover férias.' });
+      }
+      res.json({ message: 'Férias removidas com sucesso!' });
+    });
   });
 });
 
@@ -1044,30 +1188,38 @@ app.put('/api/admin/ferias/:id', authenticateToken, authorizeAdmin, (req, res) =
     return res.status(400).json({ error: 'A data de término deve ser igual ou posterior à data de início.' });
   }
 
-  db.run(
-    `UPDATE ferias SET data_inicio = ?, data_termino = ?, dias_ferias = ? WHERE id = ?`,
-    [data_inicio, data_termino, dias, feriasId],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao editar férias.' });
+  checarPermissaoFerias(req, feriasId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      `UPDATE ferias SET data_inicio = ?, data_termino = ?, dias_ferias = ? WHERE id = ?`,
+      [data_inicio, data_termino, dias, feriasId],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao editar férias.' });
+        }
+        res.json({ message: 'Férias editadas com sucesso!' });
       }
-      res.json({ message: 'Férias editadas com sucesso!' });
-    }
-  );
+    );
+  });
 });
 
 // Listar todas as solicitações de dispensa de todos os militares (para o Administrador)
 app.get('/api/admin/dispensas', authenticateToken, authorizeAdmin, (req, res) => {
+  const scoped = !isSuperAdmin(req);
   const query = `
     SELECT d.id, d.usuario_id, d.data_inicio, d.data_termino, d.dias_dispensa, d.status, d.observacao, u.nome, u.posto_graduacao
     FROM dispensas d
     JOIN usuarios u ON d.usuario_id = u.id
-    ORDER BY 
-      CASE WHEN d.status = 'Pendente' THEN 1 ELSE 2 END, 
+    ${scoped ? 'WHERE u.fracao = ?' : ''}
+    ORDER BY
+      CASE WHEN d.status = 'Pendente' THEN 1 ELSE 2 END,
       d.data_inicio DESC
   `;
+  const params = scoped ? [req.user.fracao] : [];
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao obter solicitações de dispensas.' });
     }
@@ -1083,6 +1235,10 @@ app.put('/api/admin/dispensas/:id', authenticateToken, authorizeAdmin, (req, res
   if (status !== 'Aprovada' && status !== 'Rejeitada') {
     return res.status(400).json({ error: 'Status inválido. Use Aprovada ou Rejeitada.' });
   }
+
+  checarPermissaoDispensa(req, dispensaId, (permErr, permitido) => {
+  if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+  if (!permitido) return res.status(403).json(ERRO_FRACAO);
 
   // Se for aprovação, vamos checar se o usuário tem saldo suficiente!
   if (status === 'Aprovada') {
@@ -1131,6 +1287,7 @@ app.put('/api/admin/dispensas/:id', authenticateToken, authorizeAdmin, (req, res
       res.json({ message: `Solicitação de dispensa ${status.toLowerCase()} com sucesso!` });
     });
   }
+  });
 });
 
 // Editar dados da dispensa (datas, motivo, tipo)
@@ -1149,18 +1306,23 @@ app.put('/api/admin/dispensas/:id/edit', authenticateToken, authorizeAdmin, (req
 
   const tipo = tipo_dispensa === 'comum' ? 'comum' : 'missao';
 
-  // Obs: não estamos refazendo a validação de saldo no backend por brevidade na edição, 
-  // confiando que o admin verifica antes de aprovar/salvar, 
+  // Obs: não estamos refazendo a validação de saldo no backend por brevidade na edição,
+  // confiando que o admin verifica antes de aprovar/salvar,
   // mas idealmente deveria rever o saldo se for do tipo 'missao' e estiver Aprovada.
-  
-  db.run(
-    `UPDATE dispensas SET data_inicio = ?, data_termino = ?, dias_dispensa = ?, observacao = ?, tipo_dispensa = ? WHERE id = ?`,
-    [data_inicio, data_termino, dias, observacao || '', tipo, dispensaId],
-    function (updateErr) {
-      if (updateErr) return res.status(500).json({ error: 'Erro ao editar dispensa.' });
-      res.json({ message: 'Dispensa editada com sucesso!' });
-    }
-  );
+
+  checarPermissaoDispensa(req, dispensaId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      `UPDATE dispensas SET data_inicio = ?, data_termino = ?, dias_dispensa = ?, observacao = ?, tipo_dispensa = ? WHERE id = ?`,
+      [data_inicio, data_termino, dias, observacao || '', tipo, dispensaId],
+      function (updateErr) {
+        if (updateErr) return res.status(500).json({ error: 'Erro ao editar dispensa.' });
+        res.json({ message: 'Dispensa editada com sucesso!' });
+      }
+    );
+  });
 });
 
 // Registrar dispensa diretamente pelo administrador
@@ -1177,6 +1339,10 @@ app.post('/api/admin/dispensas', authenticateToken, authorizeAdmin, (req, res) =
   }
 
   const tipo = tipo_dispensa === 'comum' ? 'comum' : 'missao';
+
+  checarPermissaoUsuario(req, usuario_id, (permErr, permitido) => {
+  if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+  if (!permitido) return res.status(403).json(ERRO_FRACAO);
 
   if (tipo === 'comum') {
     // Dispensa avulsa, aprova diretamente sem verificar saldo
@@ -1224,16 +1390,22 @@ app.post('/api/admin/dispensas', authenticateToken, authorizeAdmin, (req, res) =
       });
     });
   }
+  });
 });
 
 // Remover Registro de Dispensa (seja aprovada, pendente ou rejeitada)
 app.delete('/api/admin/dispensas/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const dispensaId = req.params.id;
-  db.run('DELETE FROM dispensas WHERE id = ?', [dispensaId], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao remover dispensa.' });
-    }
-    res.json({ message: 'Registro de dispensa removido com sucesso!' });
+  checarPermissaoDispensa(req, dispensaId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run('DELETE FROM dispensas WHERE id = ?', [dispensaId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao remover dispensa.' });
+      }
+      res.json({ message: 'Registro de dispensa removido com sucesso!' });
+    });
   });
 });
 
@@ -1275,30 +1447,38 @@ app.post('/api/admin/saques-etapa', authenticateToken, authorizeAdmin, (req, res
 
   const valor = parseFloat(quantidade_etapas) * 13.50;
 
-  db.run(
-    `INSERT INTO saques_etapa (usuario_id, data_inicio, data_termino, quantidade_etapas, valor, status, bi_solicitacao, bi_pagamento, observacao) 
-     VALUES (?, ?, ?, ?, ?, 'Aprovada', ?, ?, ?)`,
-    [usuario_id, data_inicio, data_termino, quantidade_etapas, valor, bi_solicitacao || '', bi_pagamento || '', observacao || ''],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao registrar saque etapa.' });
+  checarPermissaoUsuario(req, usuario_id, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      `INSERT INTO saques_etapa (usuario_id, data_inicio, data_termino, quantidade_etapas, valor, status, bi_solicitacao, bi_pagamento, observacao)
+       VALUES (?, ?, ?, ?, ?, 'Aprovada', ?, ?, ?)`,
+      [usuario_id, data_inicio, data_termino, quantidade_etapas, valor, bi_solicitacao || '', bi_pagamento || '', observacao || ''],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao registrar saque etapa.' });
+        }
+        res.json({ id: this.lastID, message: 'Saque etapa registrado com sucesso!' });
       }
-      res.json({ id: this.lastID, message: 'Saque etapa registrado com sucesso!' });
-    }
-  );
+    );
+  });
 });
 
 // Listar todos os saques etapa (para o Administrador)
 app.get('/api/admin/saques-etapa', authenticateToken, authorizeAdmin, (req, res) => {
+  const scoped = !isSuperAdmin(req);
   const query = `
     SELECT s.*, u.nome, u.posto_graduacao
     FROM saques_etapa s
     JOIN usuarios u ON s.usuario_id = u.id
-    ORDER BY 
+    ${scoped ? 'WHERE u.fracao = ?' : ''}
+    ORDER BY
       CASE WHEN s.status = 'Pendente' THEN 1 ELSE 2 END,
       s.data_inicio DESC
   `;
-  db.all(query, [], (err, rows) => {
+  const params = scoped ? [req.user.fracao] : [];
+  db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao obter solicitações de saque etapa.' });
     }
@@ -1315,39 +1495,49 @@ app.put('/api/admin/saques-etapa/:id', authenticateToken, authorizeAdmin, (req, 
     return res.status(400).json({ error: 'Status inválido. Use Aprovada ou Rejeitada.' });
   }
 
-  if (status) {
-    db.run(
-      `UPDATE saques_etapa 
-       SET status = ?, bi_solicitacao = COALESCE(?, bi_solicitacao), bi_pagamento = COALESCE(?, bi_pagamento), observacao = COALESCE(?, observacao) 
-       WHERE id = ?`,
-      [status, bi_solicitacao || null, bi_pagamento || null, observacao || null, saqueId],
-      function (err) {
-        if (err) return res.status(500).json({ error: 'Erro ao atualizar status do saque etapa.' });
-        res.json({ message: `Solicitação de saque etapa ${status.toLowerCase()} com sucesso!` });
-      }
-    );
-  } else {
-    db.run(
-      `UPDATE saques_etapa 
-       SET bi_solicitacao = ?, bi_pagamento = ?, observacao = ? 
-       WHERE id = ?`,
-      [bi_solicitacao || '', bi_pagamento || '', observacao || '', saqueId],
-      function (err) {
-        if (err) return res.status(500).json({ error: 'Erro ao atualizar dados do saque etapa.' });
-        res.json({ message: 'Dados de saque etapa atualizados com sucesso!' });
-      }
-    );
-  }
+  checarPermissaoSaqueEtapa(req, saqueId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    if (status) {
+      db.run(
+        `UPDATE saques_etapa
+         SET status = ?, bi_solicitacao = COALESCE(?, bi_solicitacao), bi_pagamento = COALESCE(?, bi_pagamento), observacao = COALESCE(?, observacao)
+         WHERE id = ?`,
+        [status, bi_solicitacao || null, bi_pagamento || null, observacao || null, saqueId],
+        function (err) {
+          if (err) return res.status(500).json({ error: 'Erro ao atualizar status do saque etapa.' });
+          res.json({ message: `Solicitação de saque etapa ${status.toLowerCase()} com sucesso!` });
+        }
+      );
+    } else {
+      db.run(
+        `UPDATE saques_etapa
+         SET bi_solicitacao = ?, bi_pagamento = ?, observacao = ?
+         WHERE id = ?`,
+        [bi_solicitacao || '', bi_pagamento || '', observacao || '', saqueId],
+        function (err) {
+          if (err) return res.status(500).json({ error: 'Erro ao atualizar dados do saque etapa.' });
+          res.json({ message: 'Dados de saque etapa atualizados com sucesso!' });
+        }
+      );
+    }
+  });
 });
 
 // Remover registro de saque etapa
 app.delete('/api/admin/saques-etapa/:id', authenticateToken, authorizeAdmin, (req, res) => {
   const saqueId = req.params.id;
-  db.run('DELETE FROM saques_etapa WHERE id = ?', [saqueId], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao remover saque etapa.' });
-    }
-    res.json({ message: 'Registro de saque etapa removido com sucesso!' });
+  checarPermissaoSaqueEtapa(req, saqueId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run('DELETE FROM saques_etapa WHERE id = ?', [saqueId], function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao remover saque etapa.' });
+      }
+      res.json({ message: 'Registro de saque etapa removido com sucesso!' });
+    });
   });
 });
 
@@ -1356,16 +1546,21 @@ app.put('/api/admin/missoes/:id/pago', authenticateToken, authorizeAdmin, (req, 
   const missaoId = req.params.id;
   const { gratificacao_paga } = req.body;
 
-  db.run(
-    'UPDATE missoes SET gratificacao_paga = ? WHERE id = ?',
-    [gratificacao_paga ? 1 : 0, missaoId],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao atualizar status de pagamento da gratificação.' });
+  checarPermissaoMissao(req, missaoId, (permErr, permitido) => {
+    if (permErr) return res.status(500).json({ error: 'Erro ao verificar permissão.' });
+    if (!permitido) return res.status(403).json(ERRO_FRACAO);
+
+    db.run(
+      'UPDATE missoes SET gratificacao_paga = ? WHERE id = ?',
+      [gratificacao_paga ? 1 : 0, missaoId],
+      function (err) {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao atualizar status de pagamento da gratificação.' });
+        }
+        res.json({ message: 'Status de pagamento da gratificação atualizado com sucesso!' });
       }
-      res.json({ message: 'Status de pagamento da gratificação atualizado com sucesso!' });
-    }
-  );
+    );
+  });
 });
 
 // Obter destino diário do efetivo para uma data específica (membro e admin)
@@ -1375,8 +1570,13 @@ app.get('/api/destino-diario', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'A data de consulta é obrigatória.' });
   }
 
-  // 1. Obter todos os usuários ordenados por nome
-  db.all(`SELECT id, matricula, nome, posto_graduacao FROM usuarios ORDER BY ${ordemPostoSql('usuarios')} ASC, nome ASC`, [], (err, usuarios) => {
+  // 1. Obter todos os usuários ordenados por nome. Um admin de setor (não super_admin)
+  // só vê o efetivo da própria Fração; membros e super_admin veem o efetivo completo.
+  const scoped = req.user.role === 'admin';
+  const queryUsuarios = `SELECT id, matricula, nome, posto_graduacao FROM usuarios ${scoped ? 'WHERE fracao = ?' : ''} ORDER BY ${ordemPostoSql('usuarios')} ASC, nome ASC`;
+  const paramsUsuarios = scoped ? [req.user.fracao] : [];
+
+  db.all(queryUsuarios, paramsUsuarios, (err, usuarios) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao buscar militares no banco de dados.' });
     }

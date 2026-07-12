@@ -33,6 +33,7 @@ function initializeDatabase() {
         soldo REAL NOT NULL,
         role TEXT NOT NULL DEFAULT 'membro',
         saldo_inicial_dispensas INTEGER DEFAULT 0,
+        fracao TEXT DEFAULT '',
         FOREIGN KEY (posto_graduacao) REFERENCES soldos(posto_graduacao)
       )
     `);
@@ -160,10 +161,10 @@ function initializeDatabase() {
         const adminNome = 'Administrador Geral';
         const adminPosto = 'Coronel';
         const adminSoldo = 12505.00;
-        const adminRole = 'admin';
+        const adminRole = 'super_admin';
 
         db.run(
-          `INSERT INTO usuarios (matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas) 
+          `INSERT INTO usuarios (matricula, nome, senha, posto_graduacao, soldo, role, saldo_inicial_dispensas)
            VALUES (?, ?, ?, ?, ?, ?, 0)`,
           [adminMatricula, adminNome, hashSenha, adminPosto, adminSoldo, adminRole],
           (insertErr) => {
@@ -255,19 +256,42 @@ function updateSchema(db) {
     }
   });
 
-  // Adicionar coluna observacao na tabela de usuarios (campo de contato/observações)
+  // Adicionar colunas observacao e fracao na tabela de usuarios
   db.all('PRAGMA table_info(usuarios)', (err, rows) => {
     if (err) {
       console.error('Erro ao verificar colunas de usuarios:', err);
       return;
     }
     const existingCols = rows.map(r => r.name);
+
     if (!existingCols.includes('observacao')) {
       db.run("ALTER TABLE usuarios ADD COLUMN observacao TEXT DEFAULT ''", (alterErr) => {
         if (alterErr) {
           console.error("Erro ao adicionar coluna observacao a usuarios:", alterErr.message);
         } else {
           console.log("Coluna observacao adicionada com sucesso a usuarios.");
+        }
+      });
+    }
+
+    // Coluna fracao (setor) — permite segmentar a visão dos administradores por setor.
+    if (!existingCols.includes('fracao')) {
+      db.run("ALTER TABLE usuarios ADD COLUMN fracao TEXT DEFAULT ''", (alterErr) => {
+        if (alterErr) {
+          console.error('Erro ao adicionar coluna fracao a usuarios:', alterErr.message);
+        } else {
+          console.log('Coluna fracao adicionada com sucesso a usuarios.');
+          // Migração única (só roda neste primeiro ALTER, nunca mais): promove os
+          // administradores já existentes a "super_admin", preservando o acesso
+          // irrestrito que eles já tinham antes desta mudança. Daqui para frente,
+          // novos admins criados ficam com o papel "admin", restrito à própria Fração.
+          db.run("UPDATE usuarios SET role = 'super_admin' WHERE role = 'admin'", (updateErr) => {
+            if (updateErr) {
+              console.error('Erro ao promover administradores existentes a super_admin:', updateErr.message);
+            } else {
+              console.log('Administradores existentes promovidos a Administrador Geral (super_admin).');
+            }
+          });
         }
       });
     }

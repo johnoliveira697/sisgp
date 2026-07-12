@@ -9,11 +9,22 @@ const state = {
   token: localStorage.getItem('token') || null,
   user: JSON.parse(localStorage.getItem('user')) || null,
   soldos: [], // Tabela de soldos carregada do backend
+  fracoes: [], // Lista de Frações (setores) carregada do backend (apenas para admin)
   usuarios: [], // Lista de todos os usuários (apenas para admin)
   userResumo: null, // Dados de missões, férias, dispensas do usuário logado
   missoesPagamento: [], // Lista de missões para controle na aba de Pagamentos
   saquesEtapaAdmin: [] // Lista de saques etapa para o administrador
 };
+
+// Um "super_admin" enxerga o sistema inteiro; um "admin" comum só enxerga a
+// própria Fração. Para efeitos de UI (mostrar aba admin, ações, etc.) ambos
+// contam como "administrador" — a diferença de escopo é tratada pelo backend.
+function isAdminLike(user) {
+  return !!user && (user.role === 'admin' || user.role === 'super_admin');
+}
+function isSuperAdminUser(user) {
+  return !!user && user.role === 'super_admin';
+}
 
 // Elementos do DOM
 const DOM = {
@@ -44,6 +55,7 @@ const DOM = {
   userDisplayName: document.getElementById('user-display-name'),
   userDisplayPosto: document.getElementById('user-display-posto'),
   userDisplayRole: document.getElementById('user-display-role'),
+  userDisplayFracao: document.getElementById('user-display-fracao'),
   btnLogout: document.getElementById('btn-logout'),
   
   // Navegação
@@ -139,6 +151,8 @@ const DOM = {
   userPosto: document.getElementById('user-posto'),
   userSoldo: document.getElementById('user-soldo'),
   userRole: document.getElementById('user-role'),
+  userRoleSuperAdminOption: document.getElementById('user-role-super-admin-option'),
+  userFracao: document.getElementById('user-fracao'),
   userDispensasIniciais: document.getElementById('user-dispensas-iniciais'),
 
   // Novas referências (Fase 2)
@@ -377,18 +391,31 @@ function renderAuthView() {
     // Atualizar cabeçalho
     DOM.userDisplayName.textContent = state.user.nome;
     DOM.userDisplayPosto.textContent = state.user.posto_graduacao;
-    DOM.userDisplayRole.textContent = state.user.role === 'admin' ? 'Administrador' : 'Membro';
-    DOM.userDisplayRole.className = `badge badge-role ${state.user.role === 'admin' ? 'badge-admin' : ''}`;
-    
-    if (state.user.role === 'admin') {
+    const rotuloRole = state.user.role === 'super_admin' ? 'Admin. Geral' : (state.user.role === 'admin' ? 'Administrador' : 'Membro');
+    DOM.userDisplayRole.textContent = rotuloRole;
+    DOM.userDisplayRole.className = `badge badge-role ${isAdminLike(state.user) ? 'badge-admin' : ''}`;
+
+    if (DOM.userDisplayFracao) {
+      if (state.user.fracao) {
+        DOM.userDisplayFracao.textContent = state.user.fracao;
+        DOM.userDisplayFracao.classList.remove('hidden');
+      } else {
+        DOM.userDisplayFracao.classList.add('hidden');
+      }
+    }
+
+    if (isAdminLike(state.user)) {
       DOM.navAdminTab.classList.remove('hidden');
     } else {
       DOM.navAdminTab.classList.add('hidden');
     }
-    
+
     // Carregar dados principais
     loadUserData();
     loadSoldosTable();
+    if (isAdminLike(state.user)) {
+      loadFracoesSelect();
+    }
   } else {
     DOM.loginContainer.classList.remove('hidden');
     DOM.appContainer.classList.add('hidden');
@@ -536,15 +563,49 @@ async function loadSoldosTable() {
   }
 }
 
+// Carrega a lista de Frações (setores) e popula o select do modal de cadastro
+// de militar. Um admin de setor (não super_admin) não pode escolher a Fração
+// (fica travado na própria) nem promover alguém a Administrador Geral.
+async function loadFracoesSelect() {
+  try {
+    state.fracoes = await apiFetch('/fracoes');
+
+    if (DOM.userFracao) {
+      DOM.userFracao.innerHTML = '<option value="">Selecione...</option>';
+      state.fracoes.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        DOM.userFracao.appendChild(opt);
+      });
+
+      if (!isSuperAdminUser(state.user)) {
+        // Admin de setor: trava a Fração na própria e some com a opção Admin. Geral.
+        DOM.userFracao.value = state.user.fracao || '';
+        DOM.userFracao.disabled = true;
+      } else {
+        DOM.userFracao.disabled = false;
+      }
+    }
+
+    if (DOM.userRoleSuperAdminOption) {
+      DOM.userRoleSuperAdminOption.classList.toggle('hidden', !isSuperAdminUser(state.user));
+      DOM.userRoleSuperAdminOption.disabled = !isSuperAdminUser(state.user);
+    }
+  } catch (error) {
+    console.error('Erro ao carregar Frações:', error);
+  }
+}
+
 async function loadUserData() {
   try {
     const data = await apiFetch('/membro/resumo');
     state.userResumo = data;
-    
+
     renderMembroDashboard(data);
     loadAndRenderPagamentos(); // Carrega aba Pagamentos
-    
-    if (state.user.role === 'admin') {
+
+    if (isAdminLike(state.user)) {
       loadAdminData();
     }
   } catch (error) {
@@ -596,7 +657,7 @@ function renderMembroDashboard(data) {
     DOM.tableUserFerias.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhuma férias cadastrada.</td></tr>';
   } else {
     ferias.forEach(f => {
-      const actions = state.user && state.user.role === 'admin'
+      const actions = isAdminLike(state.user)
         ? `<td data-label="Ações">
             <div style="display: flex; gap: 6px;">
              <button class="btn btn-secondary btn-icon" onclick="abrirModalEditFerias(${f.id})" title="Editar Férias">
@@ -629,7 +690,7 @@ function renderMembroDashboard(data) {
       const statusClass = d.status.toLowerCase();
       const tipoLabel = d.tipo_dispensa === 'comum' ? '<br><small style="color: var(--warning); font-weight: 500;">Dispensa Comum</small>' : '<br><small style="color: var(--text-muted);">Decorrente de Missão</small>';
       
-      const actions = state.user && state.user.role === 'admin'
+      const actions = isAdminLike(state.user)
         ? `<td data-label="Ações">
             <div style="display: flex; gap: 6px;">
              <button class="btn btn-secondary btn-icon" onclick="abrirModalEditDispensa(${d.id})" title="Editar Dispensa">
@@ -955,10 +1016,11 @@ function populateMilitarDropdowns() {
 function renderAdminPessoalTable() {
   DOM.tableAdminPessoal.innerHTML = '';
   state.usuarios.forEach(u => {
-    const isAdmin = u.role === 'admin';
-    const roleBadge = isAdmin ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-role">Membro</span>';
+    const isAdmin = u.role === 'admin' || u.role === 'super_admin';
+    const roleLabel = u.role === 'super_admin' ? 'Admin. Geral' : (u.role === 'admin' ? 'Admin' : 'Membro');
+    const roleBadge = isAdmin ? `<span class="badge badge-admin">${roleLabel}</span>` : '<span class="badge badge-role">Membro</span>';
     const balanceBadgeClass = isAdmin ? 'badge-admin' : 'badge-role';
-    
+
     DOM.tableAdminPessoal.innerHTML += `
       <tr>
         <td data-label="Identidade"><code>${u.matricula}</code></td>
@@ -966,6 +1028,7 @@ function renderAdminPessoalTable() {
         <td data-label="Posto / Graduação">${u.posto_graduacao}</td>
         <td data-label="Soldo Base">R$ ${formatarMoeda(u.soldo)}</td>
         <td data-label="Tipo Acesso">${roleBadge}</td>
+        <td data-label="Fração">${u.fracao ? `<span class="badge badge-role">${u.fracao}</span>` : '-'}</td>
         <td data-label="Saldo Dispensas">
           <span class="badge ${balanceBadgeClass}" title="Restantes / Acumuladas">${u.dispensas_restantes} / ${u.dispensas_acumuladas} dias</span>
         </td>
@@ -1632,6 +1695,11 @@ DOM.btnOpenUserModal.addEventListener('click', () => {
   DOM.formUserSave.reset();
   DOM.userSenha.required = true;
   DOM.userSenhaHelp.textContent = 'Senha padrão de acesso.';
+  // Admin de setor: novo cadastro já nasce na própria Fração, sem poder escolher outra.
+  if (DOM.userFracao && !isSuperAdminUser(state.user)) {
+    DOM.userFracao.value = state.user.fracao || '';
+    DOM.userFracao.disabled = true;
+  }
   DOM.userModal.classList.remove('hidden');
 });
 
@@ -1661,7 +1729,18 @@ window.editarMilitar = async function(id) {
   DOM.userRole.value = user.role;
   DOM.userDispensasIniciais.value = user.saldo_inicial_dispensas;
   if (DOM.userObservacao) DOM.userObservacao.value = user.observacao || '';
-  
+
+  if (DOM.userFracao) {
+    if (isSuperAdminUser(state.user)) {
+      DOM.userFracao.value = user.fracao || '';
+      DOM.userFracao.disabled = false;
+    } else {
+      // Admin de setor: não pode alterar a Fração do militar editado.
+      DOM.userFracao.value = state.user.fracao || '';
+      DOM.userFracao.disabled = true;
+    }
+  }
+
   DOM.userModal.classList.remove('hidden');
 };
 
@@ -1676,19 +1755,26 @@ DOM.formUserSave.addEventListener('submit', async (e) => {
   const posto_graduacao = DOM.userPosto.value;
   const soldo = parseFloat(DOM.userSoldo.value);
   const role = DOM.userRole.value;
+  const fracao = DOM.userFracao ? DOM.userFracao.value : '';
   const saldo_inicial_dispensas = parseInt(DOM.userDispensasIniciais.value) || 0;
   const observacao = DOM.userObservacao ? DOM.userObservacao.value.trim() : '';
-  
+
+  if (DOM.userFracao && !fracao) {
+    showToast('Selecione a Fração (setor) do militar.', 'error');
+    return;
+  }
+
   const body = {
     nome,
     matricula,
     posto_graduacao,
     soldo,
     role,
+    fracao,
     saldo_inicial_dispensas,
     observacao
   };
-  
+
   if (senha && senha.trim() !== '') {
     body.senha = senha;
   }
@@ -1891,7 +1977,7 @@ function formatarDataHora(dateTimeString) {
 async function loadAndRenderPagamentos() {
   try {
     let missoes = [];
-    if (state.user && state.user.role === 'admin') {
+    if (isAdminLike(state.user)) {
       missoes = await apiFetch('/admin/missoes');
       state.missoesPagamento = missoes;
       // Mostra coluna Ações (BIs) para o admin
@@ -1910,7 +1996,7 @@ async function loadAndRenderPagamentos() {
 
 // Renderizar a tabela de pagamentos
 function renderPagamentosTable(missoes) {
-  const isAdmin = state.user && state.user.role === 'admin';
+  const isAdmin = isAdminLike(state.user);
 
   const adminView  = document.getElementById('pagamentos-admin-view');
   const membroView = document.getElementById('pagamentos-membro-view');
@@ -2410,7 +2496,8 @@ window.imprimirRelatorioMilitar = async function(id) {
           <div><strong>Matrícula:</strong> ${user.matricula}</div>
           <div><strong>Posto / Graduação:</strong> ${user.posto_graduacao}</div>
           <div><strong>Soldo Base:</strong> R$ ${formatarMoeda(user.soldo)}</div>
-          <div><strong>Tipo de Acesso:</strong> ${user.role === 'admin' ? 'Administrador' : 'Membro'}</div>
+          <div><strong>Tipo de Acesso:</strong> ${user.role === 'super_admin' ? 'Administrador Geral' : (user.role === 'admin' ? 'Administrador' : 'Membro')}</div>
+          <div><strong>Fração:</strong> ${user.fracao || '-'}</div>
           <div><strong>Saldo Inicial de Dispensas:</strong> ${user.saldo_inicial_dispensas} dias</div>
         </div>
       </div>

@@ -183,6 +183,7 @@
           <span id="user-display-name" class="user-name">Nome Militar</span>
           <span id="user-display-posto" class="user-posto">Posto / Graduação</span>
           <span id="user-display-role" class="badge badge-role">Membro</span>
+          <span id="user-display-fracao" class="badge badge-role hidden"></span>
         </div>
       </div>
       <div class="header-right">
@@ -724,6 +725,7 @@
                     <th>Posto / Graduação</th>
                     <th>Soldo Base</th>
                     <th>Tipo Acesso</th>
+                    <th>Fração</th>
                     <th>Saldo Dispensas</th>
                     <th>Ações</th>
                   </tr>
@@ -1059,14 +1061,25 @@
             <label for="user-role">Nível de Acesso</label>
             <select id="user-role" required>
               <option value="membro" selected>Membro (Apenas visualiza dados e solicita)</option>
-              <option value="admin">Administrador (Controle total do sistema)</option>
+              <option value="admin">Administrador (Controle da própria Fração)</option>
+              <option value="super_admin" id="user-role-super-admin-option">Administrador Geral (Controle total do sistema)</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="user-fracao">Fração (Setor)</label>
+            <select id="user-fracao" required>
+              <option value="">Selecione...</option>
+            </select>
+            <small class="form-text text-muted">Administradores só veem/gerenciam militares da própria Fração.</small>
+          </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
             <label for="user-dispensas-iniciais">Saldo Inicial de Dispensas (Dias)</label>
             <input type="number" id="user-dispensas-iniciais" value="0" min="0">
             <small class="form-text text-muted">Caso já tenha saldo acumulado fora do sistema.</small>
           </div>
+          <div class="form-group"></div>
         </div>
         <div class="form-group">
           <label for="user-observacao">Observação / Contato</label>
